@@ -70,6 +70,36 @@ function terminus_drush_command() {
     'bootstrap' => DRUSH_BOOTSTRAP_DRUSH, // No bootstrap at all.
   );
 
+  $items['pantheon-hostname-add'] = array(
+    'description' => "Add a hostname to a site you control.",
+    'arguments' => array(
+      'site' => 'The site UUID you are working on.',
+      'environment' => 'The environemnt (e.g. "live").',
+      'hostname' => 'The hostname (e.g. "www.mysite.com")',
+    ),
+    'aliases' => array('phost-add'),
+    'bootstrap' => DRUSH_BOOTSTRAP_DRUSH, // No bootstrap at all.
+  );
+
+  // The 'pantheon-sitelist' command
+  $items['pantheon-pp'] = array(
+    'description' => "Direct pseudoproxy interface. JSON only, for debugging.",
+    'arguments' => array(
+      'realm' => 'Are you asking about users or sites?',
+      'uuid' => 'The unique id of the thing you want to know about.',
+      'path' => 'Optional: path extension for more specific commands.',
+    ),
+    'aliases' => array('pp'),
+    'bootstrap' => DRUSH_BOOTSTRAP_DRUSH, // No bootstrap at all.
+  );
+
+  // The 'pantheon-sitelist' command
+  $items['pantheon-whoami'] = array(
+    'description' => "Information about you the user.",
+    'aliases' => array('pme'),
+    'bootstrap' => DRUSH_BOOTSTRAP_DRUSH, // No bootstrap at all.
+  );
+
   return $items;
 }
 
@@ -229,8 +259,37 @@ function drush_terminus_pantheon_sites() {
 }
 
 /**
- * API Access
+ * User data about self.
  */
+function drush_terminus_pantheon_whoami() {
+  $data = terminus_session_data();
+  if (!$data) {
+    return drush_error("No auth", "You are not authenticated");
+  }
+  drush_print(dt("User UUID: !uuid", array('!uuid' => $data['user_uuid'])));
+  drush_print(dt("Email: !email", array('!email' => $data['email'])));
+  return TRUE;
+}
+
+/**
+ * API Debugging
+ */
+function drush_terminus_pantheon_pp($realm, $uuid, $path=FALSE) {
+  $result = terminus_pseudoproxy_request($realm, $uuid, $path);
+  drush_print($result['json']);
+  return TRUE;
+}
+
+/**
+ * API Debugging
+ */
+function drush_terminus_pantheon_hostname_add($site, $environment, $hostname) {
+  $data = array('site' => $site, 'environment' => $environment);
+  $path = 'hostnames/'. rawurlencode($hostname);
+  $result = terminus_pseudoproxy_request('site', $site, $path, 'PUT', $data);
+  drush_print($result['json']);
+  return TRUE;
+}
 
 
 /**
@@ -296,8 +355,9 @@ function terminus_pseudoproxy_request($realm, $uuid, $path = FALSE, $method = 'G
   if (!$ch) {
     $ch = curl_init();
   }
+  $headers = array();
   $session  = terminus_session_data('session');
-  $url = 'https://'. ATLAS_HOST .'/pp.php?source=terminus'. $realm .'='. $uuid;
+  $url = 'https://'. ATLAS_HOST .'/pp.php?source=terminus&'. $realm .'='. $uuid;
   if ($path) {
     $url .= '&path='. urlencode($path);
   }
