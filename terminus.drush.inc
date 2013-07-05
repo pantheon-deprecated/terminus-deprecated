@@ -7,7 +7,7 @@
 /**
  * Some constants we use.
  */
-define('ATLAS_HOST', 'dashboard.getpantheon.com');
+define('ATLAS_HOST', 'onebox.getpantheon.com');
 define('ATLAS_PORT', 443);
 
 /**
@@ -103,13 +103,238 @@ function terminus_drush_command() {
   return $items;
 }
 
+
 /**
- * This is a curl-based login tool to start a session in the dashboard.
+ * @group Drush Commands
+ *
+ * These commands exercise various aspects of the API.
+ */
+
+/**
+ * User data about self.
+ */
+function drush_terminus_pantheon_whoami() {
+  $data = terminus_session_data();
+  if (!$data) {
+    return drush_error("No auth", "You are not authenticated");
+  }
+  drush_print(dt("User UUID: !uuid", array('!uuid' => $data['user_uuid'])));
+  drush_print(dt("Email: !email", array('!email' => $data['email'])));
+  return TRUE;
+}
+
+/**
+ * Get a list of sites.
+ */
+function drush_terminus_pantheon_sites() {
+  $user_uuid = terminus_session_data('user_uuid');
+  $nocache = drush_get_option('nocache');
+  $json_output = drush_get_option('json');
+  if (!$user_uuid) {
+    return drush_set_error("No user UUID found. Please authenticate first: drush pauth");
+  }
+  if ($nocache || !$cache = drush_cache_get('terminus-sites', 'pantheon')) {
+    drush_log('Loading site data from Pantheon.', 'notice');
+    $result = terminus_request('user', $user_uuid, 'sites');
+    $sites = $result['json'];
+    drush_cache_set('terminus-sites', $sites, 'pantheon');
+  }
+  else {
+    drush_log('Loaded site data from cache.', 'notice');
+    $sites = $cache->data;
+  }
+  if ($json_output) {
+    drush_print($sites);
+    return TRUE;
+  }
+
+  // Display tabular output.
+  $sites = json_decode($sites);
+  $rows = array();
+  foreach ($sites as $site_uuid => $data) {
+    $i = $data->information;
+    $rows[$i->name] = array($i->name, $i->service_level, $site_uuid);
+  }
+  ksort($rows);
+  array_unshift($rows, array("Site", "Service Level", "UUID"));
+  drush_print_table($rows, TRUE);
+}
+
+/**
+ * API Debugging command. Try out anything you like.
+ */
+function drush_terminus_pantheon_pp($realm, $uuid, $path=FALSE) {
+  $result = terminus_request($realm, $uuid, $path);
+  drush_print($result['json']);
+  return TRUE;
+}
+
+/**
+ * Add a hostname.
+ */
+function drush_terminus_pantheon_hostname_add($site, $environment, $hostname) {
+  $data = array('site' => $site, 'environment' => $environment);
+  $path = 'hostnames/'. rawurlencode($hostname);
+  $result = terminus_request('site', $site, $path, 'PUT', $data);
+  drush_print($result['json']);
+  return TRUE;
+}
+
+/**
+ * Get rid of the current session.
+ */
+function drush_terminus_pantheon_logout() {
+  drush_cache_clear_all('*', 'pantheon', TRUE);
+  drush_log('Removed session token and cleared all locally cached data.', 'ok');
+}
+
+/**
+ * Get or set current session data from cache.
+ */
+function terminus_session_data($key = FALSE) {
+  static $cache = FALSE;
+  if (!$cache) {
+    $cache = drush_cache_get('terminus-current-session', 'pantheon');
+    if (time() - $cache->created > 3600) {
+      // Only allow cached auth for an hour.
+      drush_cache_clear_all('*', 'pantheon', TRUE);
+      return FALSE;
+    }
+  }
+  if (!$cache) {
+    // No session data. That's not good.
+    return FALSE;
+  }
+  if ($key && isset($cache->data[$key])) {
+    return $cache->data[$key];
+  }
+  elseif($key) {
+    return FALSE;
+  }
+  return $cache->data;
+}
+
+/**
+ * Validate cached session data.
+ */
+function terminus_validate_session($data) {
+  $result = terminus_request('user', $data['user_uuid'], 'email');
+  $email = @json_decode($result['json']);
+  return $email == $data['email'];
+}
+
+/**
+ * Make a request to the Dashbord's internal API.
+ *
+ * @param $realm
+ *    Permissions realm for data request: currently "user" or "site" but in the
+ *    future this could also be "orgnaization" or another high-level business
+ *    object (e.g. "product" for managing your app). Can also be "public" to
+ *    simply pull read-only data that is not privileged.
+ *
+ * @param $uuid
+ *    The uuid of the item in the realm you want to access.
+ *
+ * @param $method
+ *    HTTP method (verb) to use.
+ *
+ * @param $data
+ *    A native php data structure (int, string, arary or simple object) to be
+ *    sent along with the request. Will be encoded as JSON for you.
+ */
+function terminus_request($realm, $uuid, $path = FALSE, $method = 'GET', $data = NULL) {
+  static $ch = FALSE;
+  if (!$ch) {
+    $ch = curl_init();
+  }
+  $headers = array();
+  $session  = terminus_session_data('session');
+  $url = 'https://'. ATLAS_HOST .'/pp.php?source=terminus&'. $realm .'='. $uuid;
+  if ($path) {
+    $url .= '&path='. urlencode($path);
+  }
+  if ($data) {
+    // $data for POSTs, PUTs, DELETEs are sent as JSON.
+    if ($method === 'POST' || $method === 'PUT' || $method === 'DELETE') {
+      $data = json_encode(array('data' => $data));
+      curl_setopt($ch, CURLOPT_POST, 1);
+      curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
+      curl_setopt($ch, CURLOPT_BINARYTRANSFER, TRUE);
+      array_push($headers, 'Content-Type: application/json', 'Content-Length: '. strlen($data));
+    }
+    // $data for GETs is sent as querystrings.
+    else if ($method === "GET") {
+      $url .= "?" . http_build_query($data);
+    }
+  }
+  // set URL and other appropriate options
+  $opts = array(
+    CURLOPT_URL => $url,
+    CURLOPT_HEADER => 1,
+    CURLOPT_PORT => ATLAS_PORT,
+    CURLOPT_RETURNTRANSFER => 1,
+    CURLOPT_TIMEOUT => 5,
+    CURLOPT_CUSTOMREQUEST => $method,
+    CURLOPT_COOKIE => $session,
+    CURLOPT_HTTPHEADER => $headers,
+  );
+  curl_setopt_array($ch, $opts);
+
+  if (ATLAS_HOST == 'onebox.getpantheon.com') {
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, FALSE);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+  }
+
+  // grab URL and pass it to the browser
+  $result = curl_exec($ch);
+  list($headers_text, $json) = explode("\r\n\r\n", $result, 2);
+  // Work around extra 100 Continue headers - http://stackoverflow.com/a/2964710/1895669
+  if(strpos($headers_text," 100 Continue")!==false){
+    list($headers_text, $json) = explode( "\r\n\r\n", $json , 2);
+  }
+
+  if (curl_errno($ch) != 0) {
+    $error = curl_error($ch);
+    curl_close($ch);
+    echo "CONNECTION ERROR: $error\n";
+    exit(1);
+  }
+
+  return array('headers' => $headers_text, 'json' => $json);
+}
+
+/**
+ * Clean up output so there are consistent service level names.
+ */
+function _terminus_service_level_name($level) {
+  $levels = array(
+    'legacy_basic' => 'personal',
+    'basic' => 'personal',
+    'legacy_pro' => 'pro',
+  );
+  if (isset($levels[$level])) {
+    return $levels[$level];
+  }
+  return $level;
+}
+
+
+/**
+ * This is a curl-based tool to start a session in the dashboard.
+ *
+ * It doesn't follow the normal pattern since it's working off Drupal's login
+ * forms directly. This will be refactored when there's a direct CLI auth
+ * mechanism in the API itself.
  *
  * Many thanks to Amitai and the gang at: https://drupal.org/node/89710
  *
  */
-function drush_terminus_pantheon_auth($email) {
+function drush_terminus_pantheon_auth($email=FALSE) {
+    // Flush existing data.
+    drush_cache_clear_all('*', 'pantheon', TRUE);
+    if (!$email) {
+      $email = drush_prompt(dt('Pantheon account email address'), NULL, TRUE);
+    }
     $nocache = drush_get_option('nocache');
     $session_data = terminus_session_data();
     if (!$nocache && $session_data) {
@@ -125,19 +350,25 @@ function drush_terminus_pantheon_auth($email) {
       // TODO: consider an alternative ways to start a session using a shared
       // secret key. This would allow us to differentiate between dashboard
       // users and drush users.
+      /*
       drush_print("Pantheon dashboard password: ");
       system('stty -echo');
       $password = trim(fgets(STDIN));
       system('stty echo');
-      // $password = drush_prompt(dt('Pantheon dashboard password'), NULL, TRUE, TRUE);
+      */
+      $password = drush_prompt(dt('Pantheon dashboard password'), NULL, TRUE, TRUE);
     }
-    drush_log(dt('Authenticating as !email', array('!email' => $email)), 'notice');
+    drush_log(dt('Authenticating as !email', array('!email' => $email)), 'ok');
     $ch = curl_init();
     $url = 'https://'. ATLAS_HOST .'/login';
     // set URL and other appropriate options
     curl_setopt($ch, CURLOPT_URL, $url);
     curl_setopt($ch, CURLOPT_HEADER, 0);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+    if (ATLAS_HOST == 'onebox.getpantheon.com') {
+      curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, FALSE);
+      curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+    }
 
     // grab URL and pass it to the browser
     $result = curl_exec($ch);
@@ -180,7 +411,7 @@ function drush_terminus_pantheon_auth($email) {
 
     $set_cookie_header = terminus_parse_drupal_headers($result, 'Set-Cookie');
     if (!$set_cookie_header) {
-      return drush_set_error("Authentication Failure!", 'Authentication failed. Please check your credentials and try again.');
+      return drush_set_error("Failure!", 'Authentication failed. Please check your credentials and try again.');
     }
     $session = FALSE;
     $set_cookie = explode('; ', $set_cookie_header);
@@ -190,7 +421,7 @@ function drush_terminus_pantheon_auth($email) {
       }
     }
     if (!$session) {
-      return drush_set_error("Authentication Failure!", 'Session not found. Please check your credentials and try again.');
+      return drush_set_error("Failure!", 'Session not found. Please check your credentials and try again.');
     }
 
     // Grab the UUID Now
@@ -199,12 +430,14 @@ function drush_terminus_pantheon_auth($email) {
     $result = curl_exec($ch);
     $location_header = terminus_parse_drupal_headers($result, 'Location');
     if (!$location_header) {
-      return drush_set_error("Authentication Failure!", 'Could not determine user UUID. Please check your credentials and try again.');
+      return drush_set_error("Failure!", 'Could not determine user UUID. Please check your credentials and try again.');
     }
     $user_uuid = array_pop(explode('/', $location_header));
 
-    drush_log('Authentication success!', 'ok');
+    drush_log('Success!', 'ok');
     drush_log(dt('User UUID: !user_uuid', array('!user_uuid' => $user_uuid)), 'notice');
+
+    // Start socking away new data.
     $data = array('user_uuid' => $user_uuid, 'session' => $session, 'email' => $email);
     drush_cache_set('terminus-current-session', $data, 'pantheon');
 
@@ -213,117 +446,9 @@ function drush_terminus_pantheon_auth($email) {
     curl_close($ch);
 }
 
-/**
- * Get rid of the current session.
- */
-function drush_terminus_pantheon_logout() {
-  drush_cache_clear_all('*', 'pantheon', TRUE);
-  drush_log('Removed session token and cleared all locally cached data.', 'ok');
-}
 
 /**
- * Get a list of sites.
- */
-function drush_terminus_pantheon_sites() {
-  $user_uuid = terminus_session_data('user_uuid');
-  $nocache = drush_get_option('nocache');
-  $json_output = drush_get_option('json');
-  if (!$user_uuid) {
-    return drush_set_error("No user UUID found. Are you authenticated?");
-  }
-  if ($nocache || !$cache = drush_cache_get('terminus-sites', 'pantheon')) {
-    drush_log('Loading site data from Pantheon.', 'notice');
-    $result = terminus_pseudoproxy_request('user', $user_uuid, 'sites');
-    $sites = $result['json'];
-    drush_cache_set('terminus-sites', $sites, 'pantheon');
-  }
-  else {
-    drush_log('Loaded site data from cache.', 'notice');
-    $sites = $cache->data;
-  }
-  if ($json_output) {
-    drush_print($sites);
-    return TRUE;
-  }
-
-  // Display tabular output.
-  $sites = json_decode($sites);
-  $rows = array();
-  foreach ($sites as $site_uuid => $data) {
-    $i = $data->information;
-    $rows[$i->name] = array($i->name, $i->service_level, $site_uuid);
-  }
-  ksort($rows);
-  array_unshift($rows, array("Site", "Service Level", "UUID"));
-  drush_print_table($rows, TRUE);
-}
-
-/**
- * User data about self.
- */
-function drush_terminus_pantheon_whoami() {
-  $data = terminus_session_data();
-  if (!$data) {
-    return drush_error("No auth", "You are not authenticated");
-  }
-  drush_print(dt("User UUID: !uuid", array('!uuid' => $data['user_uuid'])));
-  drush_print(dt("Email: !email", array('!email' => $data['email'])));
-  return TRUE;
-}
-
-/**
- * API Debugging
- */
-function drush_terminus_pantheon_pp($realm, $uuid, $path=FALSE) {
-  $result = terminus_pseudoproxy_request($realm, $uuid, $path);
-  drush_print($result['json']);
-  return TRUE;
-}
-
-/**
- * API Debugging
- */
-function drush_terminus_pantheon_hostname_add($site, $environment, $hostname) {
-  $data = array('site' => $site, 'environment' => $environment);
-  $path = 'hostnames/'. rawurlencode($hostname);
-  $result = terminus_pseudoproxy_request('site', $site, $path, 'PUT', $data);
-  drush_print($result['json']);
-  return TRUE;
-}
-
-
-/**
- * Get the current session data.
- */
-function terminus_session_data($key = FALSE) {
-  static $cache = FALSE;
-  if (!$cache) {
-    $cache = drush_cache_get('terminus-current-session', 'pantheon');
-  }
-  if (!$cache) {
-    // No session data. That's not good.
-    return FALSE;
-  }
-  if ($key && isset($cache->data[$key])) {
-    return $cache->data[$key];
-  }
-  elseif($key) {
-    return FALSE;
-  }
-  return $cache->data;
-}
-
-/**
- * Validate cached session data.
- */
-function terminus_validate_session($data) {
-  $result = terminus_pseudoproxy_request('user', $data['user_uuid'], 'email');
-  $email = @json_decode($result['json']);
-  return $email == $data['email'];
-}
-
-/**
- * Helper function for parsing Drupal headers.
+ * Helper function for parsing Drupal headers for login.
  */
 function terminus_parse_drupal_headers($result, $target_header='Set-Cookie') {
   // Check that we have a 302 and a session.
@@ -348,70 +473,4 @@ function terminus_parse_drupal_headers($result, $target_header='Set-Cookie') {
   }
 
   return FALSE;
-}
-
-function terminus_pseudoproxy_request($realm, $uuid, $path = FALSE, $method = 'GET', $data = NULL) {
-  static $ch = FALSE;
-  if (!$ch) {
-    $ch = curl_init();
-  }
-  $headers = array();
-  $session  = terminus_session_data('session');
-  $url = 'https://'. ATLAS_HOST .'/pp.php?source=terminus&'. $realm .'='. $uuid;
-  if ($path) {
-    $url .= '&path='. urlencode($path);
-  }
-  if ($data) {
-    // $data for POSTs, PUTs, DELETEs are sent as JSON.
-    if ($method === 'POST' || $method === 'PUT' || $method === 'DELETE') {
-      $data = json_encode($data);
-      curl_setopt($ch, CURLOPT_POST, 1);
-      curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
-      array_push($headers, 'Content-Type: application/json', 'Content-Length: '. strlen($data));
-    }
-    // $data for GETs is sent as querystrings.
-    else if ($method === "GET") {
-      $url .= "?" . http_build_query($data);
-    }
-  }
-  // set URL and other appropriate options
-  $opts = array(
-    CURLOPT_URL => $url,
-    CURLOPT_HEADER => 1,
-    CURLOPT_PORT => ATLAS_PORT,
-    CURLOPT_RETURNTRANSFER => 1,
-    CURLOPT_TIMEOUT => 5,
-    CURLOPT_CUSTOMREQUEST => $method,
-    CURLOPT_COOKIE => $session,
-  );
-  curl_setopt_array($ch, $opts);
-
-  // grab URL and pass it to the browser
-  $result = curl_exec($ch);
-  list($headers_text, $json) = explode("\r\n\r\n", $result, 2);
-  // Work around extra 100 Continue headers - http://stackoverflow.com/a/2964710/1895669
-  if(strpos($headers_text," 100 Continue")!==false){
-    list($headers_text, $json) = explode( "\r\n\r\n", $json , 2);
-  }
-
-  if (curl_errno($ch) != 0) {
-    $error = curl_error($ch);
-    curl_close($ch);
-    echo "CONNECTION ERROR: $error\n";
-    exit(1);
-  }
-
-  return array('headers' => $headers_text, 'json' => $json);
-}
-
-function _terminus_service_level_name($level) {
-  $levels = array(
-    'legacy_basic' => 'personal',
-    'basic' => 'personal',
-    'legacy_pro' => 'pro',
-  );
-  if (isset($levels[$level])) {
-    return $levels[$level];
-  }
-  return $level;
 }
