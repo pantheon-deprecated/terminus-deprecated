@@ -81,6 +81,31 @@ function terminus_drush_command() {
     'bootstrap' => DRUSH_BOOTSTRAP_DRUSH, // No bootstrap at all.
   );
 
+  $items['pantheon-hostname-remove'] = array(
+    'description' => "Remove a hostname from a site you control.",
+    'arguments' => array(
+      'site' => 'The site UUID you are working on.',
+      'environment' => 'The environemnt (e.g. "live").',
+      'hostname' => 'The hostname (e.g. "www.mysite.com")',
+    ),
+    'aliases' => array('phost-remove'),
+    'bootstrap' => DRUSH_BOOTSTRAP_DRUSH, // No bootstrap at all.
+  );
+
+  $items['pantheon-products'] = array(
+    'description' => "Get the list of available Drupal product start-states.",
+    'options' => array(
+      'nocache' => array(
+        'description' => 'Force a refresh of cached authentication session.',
+      ),
+      'json' => array(
+        'description' => 'Return output in JSON. Useful for scripting.',
+      ),
+    ),
+    'aliases' => array('pproducts'),
+    'bootstrap' => DRUSH_BOOTSTRAP_DRUSH, // No bootstrap at all.
+  );
+
   // The 'pantheon-sitelist' command
   $items['pantheon-pp'] = array(
     'description' => "Direct pseudoproxy interface. JSON only, for debugging.",
@@ -116,7 +141,8 @@ function terminus_drush_command() {
 function drush_terminus_pantheon_whoami() {
   $data = terminus_session_data();
   if (!$data) {
-    return drush_error("No auth", "You are not authenticated");
+    drush_log('You are not authenticated', 'failed');
+    return FALSE;
   }
   drush_print(dt("User UUID: !uuid", array('!uuid' => $data['user_uuid'])));
   drush_print(dt("Email: !email", array('!email' => $data['email'])));
@@ -129,15 +155,19 @@ function drush_terminus_pantheon_whoami() {
 function drush_terminus_pantheon_sites() {
   $user_uuid = terminus_session_data('user_uuid');
   $nocache = drush_get_option('nocache');
+  $cid = 'terminus-sites';
   $json_output = drush_get_option('json');
   if (!$user_uuid) {
     return drush_set_error("No user UUID found. Please authenticate first: drush pauth");
   }
-  if ($nocache || !$cache = drush_cache_get('terminus-sites', 'pantheon')) {
+  if ($nocache || !$cache = drush_cache_get($cid, 'pantheon')) {
     drush_log('Loading site data from Pantheon.', 'notice');
     $result = terminus_request('user', $user_uuid, 'sites');
+    if ($result === FALSE) {
+      return FALSE;
+    }
     $sites = $result['json'];
-    drush_cache_set('terminus-sites', $sites, 'pantheon');
+    drush_cache_set($cid, $sites, 'pantheon');
   }
   else {
     drush_log('Loaded site data from cache.', 'notice');
@@ -165,7 +195,9 @@ function drush_terminus_pantheon_sites() {
  */
 function drush_terminus_pantheon_pp($realm, $uuid, $path=FALSE) {
   $result = terminus_request($realm, $uuid, $path);
-  drush_print($result['json']);
+  if ($result === FALSE) {
+    return FALSE;
+  }
   return TRUE;
 }
 
@@ -174,10 +206,65 @@ function drush_terminus_pantheon_pp($realm, $uuid, $path=FALSE) {
  */
 function drush_terminus_pantheon_hostname_add($site, $environment, $hostname) {
   $data = array('site' => $site, 'environment' => $environment);
-  $path = 'hostnames/'. rawurlencode($hostname);
+  $path = 'environments/'. $environment .'/hostnames/'. rawurlencode($hostname);
   $result = terminus_request('site', $site, $path, 'PUT', $data);
-  drush_print($result['json']);
+  if ($result === FALSE) {
+    return FALSE;
+  }
+  drush_log("Added '$hostname' to the $environment environment", 'ok');
   return TRUE;
+}
+
+/**
+ * Remove a hostname.
+ */
+function drush_terminus_pantheon_hostname_remove($site, $environment, $hostname) {
+  $path = 'environments/'. $environment .'/hostnames/'. rawurlencode($hostname);
+  $result = terminus_request('site', $site, $path, 'DELETE');
+  if ($result === FALSE) {
+    return FALSE;
+  }
+  drush_log("Removed '$hostname' from the $environment environment", 'ok');
+  return TRUE;
+}
+
+/**
+ * Get the list of products.
+ */
+function drush_terminus_pantheon_products() {
+  $nocache = drush_get_option('nocache');
+  $json_output = drush_get_option('json');
+  $cid = 'terminus-products';
+  if ($nocache || !$cache = drush_cache_get($cid, 'pantheon')) {
+    drush_log('Loading site data from Pantheon.', 'notice');
+    $result = terminus_request('public', 'public', 'products');
+    if ($result === FALSE) {
+      return FALSE;
+    }
+    $products = $result['json'];
+    drush_cache_set($cid, $products, 'pantheon');
+  }
+  else {
+    drush_log('Loaded site data from cache.', 'notice');
+    $products = $cache->data;
+  }
+  if ($json_output) {
+    drush_print($products);
+    return TRUE;
+  }
+
+  // Display tabular output.
+  $products = json_decode($products);
+  $rows = array();
+  foreach ($products as $product_uuid => $data) {
+    $i = $data->attributes;
+    if ($i->organization_uuid == '') {
+      $rows[$i->machinename] = array($i->longname, $i->author, $product_uuid);
+    }
+  }
+  ksort($rows);
+  array_unshift($rows, array("Product", "Maker", "UUID"));
+  drush_print_table($rows, TRUE);
 }
 
 /**
@@ -219,6 +306,9 @@ function terminus_session_data($key = FALSE) {
  */
 function terminus_validate_session($data) {
   $result = terminus_request('user', $data['user_uuid'], 'email');
+  if ($result === FALSE) {
+    return FALSE;
+  }
   $email = @json_decode($result['json']);
   return $email == $data['email'];
 }
@@ -249,7 +339,9 @@ function terminus_request($realm, $uuid, $path = FALSE, $method = 'GET', $data =
   }
   $headers = array();
   $session  = terminus_session_data('session');
-  $url = 'https://'. ATLAS_HOST .'/pp.php?source=terminus&'. $realm .'='. $uuid;
+  // TODO: don't use pp.php.
+  // We will need something else we can lock down if needed.
+  $url = 'https://'. ATLAS_HOST .'/terminus.php?'. $realm .'='. $uuid;
   if ($path) {
     $url .= '&path='. urlencode($path);
   }
@@ -281,11 +373,14 @@ function terminus_request($realm, $uuid, $path = FALSE, $method = 'GET', $data =
   curl_setopt_array($ch, $opts);
 
   if (ATLAS_HOST == 'onebox.getpantheon.com') {
+    // Allow debugging to work against a onebox.
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, FALSE);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, FALSE);
   }
 
   // grab URL and pass it to the browser
+  drush_log('Making api request.', 'notice');
+  drush_log($url, 'notice');
   $result = curl_exec($ch);
   list($headers_text, $json) = explode("\r\n\r\n", $result, 2);
   // Work around extra 100 Continue headers - http://stackoverflow.com/a/2964710/1895669
@@ -296,10 +391,19 @@ function terminus_request($realm, $uuid, $path = FALSE, $method = 'GET', $data =
   if (curl_errno($ch) != 0) {
     $error = curl_error($ch);
     curl_close($ch);
-    echo "CONNECTION ERROR: $error\n";
-    exit(1);
+    drush_log("CONNECTION ERROR: $error", 'failed');
+    return FALSE;
+  }
+  $info = curl_getinfo($ch);
+  if ($info['http_code'] > 399) {
+    drush_log('Request failed: '. $info['http_code']. ' '. $json, 'failed');
+    return FALSE;
   }
 
+  // TODO: nice to have a timer here for how long the request took.
+  drush_log('Request complete.', 'notice');
+  drush_log("Respnse headers:\n" .$headers_text, 'notice');
+  drush_log("JSON response:\n" . $json, 'notice');
   return array('headers' => $headers_text, 'json' => $json);
 }
 
