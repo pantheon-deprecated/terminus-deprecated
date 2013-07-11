@@ -106,6 +106,17 @@ function terminus_drush_command() {
     'bootstrap' => DRUSH_BOOTSTRAP_DRUSH, // No bootstrap at all.
   );
 
+  $items['pantheon-aliases'] = array(
+    'description' => "Update the Pantheon Drush alias file at ~/.drush/pantheon.aliases.drushrc.php.",
+    'options' => array(
+      'destination' => array(
+        'description' => 'Specify the destination to save the alias file.',
+      ),
+    ),
+    'aliases' => array('paliases'),
+    'bootstrap' => DRUSH_BOOTSTRAP_DRUSH, // No bootstrap at all.
+  );
+
   // The 'pantheon-sitelist' command
   $items['pantheon-pp'] = array(
     'description' => "Direct pseudoproxy interface. JSON only, for debugging.",
@@ -148,6 +159,57 @@ function drush_terminus_pantheon_whoami() {
   drush_print(dt("Email: !email", array('!email' => $data['email'])));
   return TRUE;
 }
+
+/**
+ * Update alias list.
+ */
+function drush_terminus_pantheon_aliases() {
+  $data = terminus_session_data();
+  $default_destination = FALSE;
+  $home = drush_server_home();
+  if ($home) {
+    $default_destination = drush_normalize_path($home . '/.drush/pantheon.aliases.drushrc.php');
+  }
+  $destination = drush_get_option('destination', $default_destination);
+  if ($destination == FALSE) {
+    drush_log('Could not auto-determine destination. Please provide one using the --destination option.', 'failed');
+    return FALSE;
+  }
+  $fh = fopen($destination, 'w');
+  if ($fh === FALSE) {
+    drush_log('Cannot write aliases to "'. $destination .'" - verify this location is writable.', 'failed');
+    return FALSE;
+  }
+  if (!$data) {
+    drush_log('You are not authenticated', 'failed');
+    return FALSE;
+  }
+  drush_log('Loading aliases from Pantheon.', 'notice');
+  // This one is a little wonky still. Goes to Drupal.
+  $ch = curl_init();
+  $url = 'https://'. ATLAS_HOST .'/users/'. $data['user_uuid'] .'/drushrc';
+  curl_setopt($ch, CURLOPT_COOKIE, $data['session']);
+  curl_setopt($ch, CURLOPT_URL, $url);
+  curl_setopt($ch, CURLOPT_HEADER, 0);
+  curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+  if (ATLAS_HOST == 'onebox.getpantheon.com') {
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, FALSE);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, FALSE);
+  }
+
+  $result = curl_exec($ch);
+  if ($result === FALSE) {
+    drush_log('Failed fetching aliases. Try again?');
+    return FALSE;
+  }
+  drush_log('Writing aliases to "'. $destination .'".', 'notice');
+  fwrite($fh, $result);
+  fclose($fh);
+  drush_log('Pantheon aliases updated!.', 'ok');
+
+  return TRUE;
+}
+
 
 /**
  * Get a list of sites.
@@ -471,7 +533,7 @@ function drush_terminus_pantheon_auth($email=FALSE) {
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
     if (ATLAS_HOST == 'onebox.getpantheon.com') {
       curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, FALSE);
-      curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+      curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, FALSE);
     }
 
     // grab URL and pass it to the browser
