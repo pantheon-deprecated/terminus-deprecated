@@ -106,6 +106,35 @@ function terminus_drush_command() {
     'bootstrap' => DRUSH_BOOTSTRAP_DRUSH, // No bootstrap at all.
   );
 
+  $items['pantheon-site-create'] = array(
+    'description' => "Create a new site on Pantheon",
+    'arguments' => array(
+      'name' => 'Shortname of the site to create. Will be part of the url.',
+    ),
+    'options' => array(
+      'label' => array(
+        'description' => 'Human-friendly site label.',
+      ),
+      'product' => array(
+        'description' => 'UUID of the product you want to start with (see pantheon-products).',
+      ),
+      'organization' => array(
+        'description' => 'UUID of an organization you want the site to be a part of.',
+      ),
+    ),
+    'aliases' => array('psite-create'),
+    'bootstrap' => DRUSH_BOOTSTRAP_DRUSH, // No bootstrap at all.
+  );
+
+  $items['pantheon-site-delete'] = array(
+    'description' => "Delete a site from Pantheon.",
+    'arguments' => array(
+      'site' => 'UUID of the site you want to delete.',
+    ),
+    'aliases' => array('psite-delete'),
+    'bootstrap' => DRUSH_BOOTSTRAP_DRUSH, // No bootstrap at all.
+  );
+
   $items['pantheon-aliases'] = array(
     'description' => "Update the Pantheon Drush alias file at ~/.drush/pantheon.aliases.drushrc.php.",
     'options' => array(
@@ -117,19 +146,18 @@ function terminus_drush_command() {
     'bootstrap' => DRUSH_BOOTSTRAP_DRUSH, // No bootstrap at all.
   );
 
-  // The 'pantheon-sitelist' command
   $items['pantheon-pp'] = array(
     'description' => "Direct pseudoproxy interface. JSON only, for debugging.",
     'arguments' => array(
       'realm' => 'Are you asking about users or sites?',
       'uuid' => 'The unique id of the thing you want to know about.',
       'path' => 'Optional: path extension for more specific commands.',
+      'json' => 'Optional: return simple JSON; good for scripting.',
     ),
     'aliases' => array('pp'),
     'bootstrap' => DRUSH_BOOTSTRAP_DRUSH, // No bootstrap at all.
   );
 
-  // The 'pantheon-sitelist' command
   $items['pantheon-whoami'] = array(
     'description' => "Information about you the user.",
     'aliases' => array('pme'),
@@ -159,6 +187,72 @@ function drush_terminus_pantheon_whoami() {
   drush_print(dt("Email: !email", array('!email' => $data['email'])));
   return TRUE;
 }
+
+/**
+ * Create a new site via the CLI.
+ */
+function drush_terminus_pantheon_site_create($name = FALSE) {
+  $data = terminus_session_data();
+  if (!$data) {
+    drush_log('You are not authenticated', 'failed');
+    return FALSE;
+  }
+  if (!$name) {
+    drush_log('You must supply a site name', 'failed');
+    return FALSE;
+  }
+
+  # Construct payload. We don't want empty/null values.
+  $site_data = array();
+  $site_data['name'] = preg_replace("/[^A-Za-z0-9 ]/", '', $name);
+  if (drush_get_option('label')) {
+    $site_data['label'] = drush_get_option('label');
+  }
+  if (drush_get_option('organization')) {
+    $site_data['organization'] = drush_get_option('organization');
+  }
+  if (drush_get_option('product')) {
+    $site_data['product'] = drush_get_option('product');
+  }
+
+  $result = terminus_request('user', $data['user_uuid'], 'sites', POST, $site_data);
+  if (!$result) {
+    drush_log("Site create failed", "failed");
+    return FALSE;
+  }
+  if (drush_get_option('json')) {
+    drush_print(json_decode($result['json']));
+    return TRUE;
+  }
+  drush_log("Site is building now in your dashboard.", "ok");
+  drush_print("The new site's UUID is '". json_decode($result['json']) ."'");
+  drush_cache_clear_all('terminus-sites', 'pantheon');
+  return TRUE;
+}
+
+/**
+ * Create a new site via the CLI.
+ */
+function drush_terminus_pantheon_site_delete($site_uuid = FALSE) {
+  $data = terminus_session_data();
+  if (!$data) {
+    drush_log('You are not authenticated', 'failed');
+    return FALSE;
+  }
+  if (!$site_uuid) {
+    drush_log('You must supply a site UUID', 'failed');
+    return FALSE;
+  }
+  $confirm = drush_confirm("Are you sure you want to delete?");
+  if (!$confirm) {
+    return TRUE;
+  }
+  $result = terminus_request('site', $site_uuid, '', DELETE);
+  drush_log("Site deleted.", "ok");
+  drush_cache_clear_all('terminus-sites', 'pantheon');
+  return TRUE;
+}
+
 
 /**
  * Update alias list.
