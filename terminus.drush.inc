@@ -7,8 +7,20 @@
 /**
  * Some constants we use.
  */
-define('ATLAS_HOST', 'onebox.getpantheon.com');
-define('ATLAS_PORT', 443);
+define('TERMINUS_HOST', 'terminus.getpantheon.com');
+define('TERMINUS_PORT', 443);
+
+/**
+ * An easy function to override constants to allow development internally.
+ *
+ * TODO: use for other settings.
+ */
+function terminus_bootstrap() {
+  $data = terminus_session_data();
+  if (drush_get_option('onebox')) {
+    define('TERMINUS_HOST', 'onebox.getpantheon.com');
+  }
+}
 
 /**
  * Implementation of hook_drush_command().
@@ -281,12 +293,12 @@ function drush_terminus_pantheon_aliases() {
   drush_log('Loading aliases from Pantheon.', 'notice');
   // This one is a little wonky still. Goes to Drupal.
   $ch = curl_init();
-  $url = 'https://'. ATLAS_HOST .'/users/'. $data['user_uuid'] .'/drushrc';
+  $url = 'https://'. TERMINUS_HOST .'/users/'. $data['user_uuid'] .'/drushrc';
   curl_setopt($ch, CURLOPT_COOKIE, $data['session']);
   curl_setopt($ch, CURLOPT_URL, $url);
   curl_setopt($ch, CURLOPT_HEADER, 0);
   curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-  if (ATLAS_HOST == 'onebox.getpantheon.com') {
+  if (TERMINUS_HOST == 'onebox.getpantheon.com') {
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, FALSE);
     curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, FALSE);
   }
@@ -497,7 +509,7 @@ function terminus_request($realm, $uuid, $path = FALSE, $method = 'GET', $data =
   $session  = terminus_session_data('session');
   // TODO: don't use pp.php.
   // We will need something else we can lock down if needed.
-  $url = 'https://'. ATLAS_HOST .'/terminus.php?'. $realm .'='. $uuid;
+  $url = 'https://'. TERMINUS_HOST .'/terminus.php?'. $realm .'='. $uuid;
   if ($path) {
     $url .= '&path='. urlencode($path);
   }
@@ -519,7 +531,7 @@ function terminus_request($realm, $uuid, $path = FALSE, $method = 'GET', $data =
   $opts = array(
     CURLOPT_URL => $url,
     CURLOPT_HEADER => 1,
-    CURLOPT_PORT => ATLAS_PORT,
+    CURLOPT_PORT => TERMINUS_PORT,
     CURLOPT_RETURNTRANSFER => 1,
     CURLOPT_TIMEOUT => 5,
     CURLOPT_CUSTOMREQUEST => $method,
@@ -528,7 +540,7 @@ function terminus_request($realm, $uuid, $path = FALSE, $method = 'GET', $data =
   );
   curl_setopt_array($ch, $opts);
 
-  if (ATLAS_HOST == 'onebox.getpantheon.com') {
+  if (TERMINUS_HOST == 'onebox.getpantheon.com') {
     // Allow debugging to work against a onebox.
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, FALSE);
     curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, FALSE);
@@ -620,12 +632,12 @@ function drush_terminus_pantheon_auth($email=FALSE) {
     }
     drush_log(dt('Authenticating as !email', array('!email' => $email)), 'ok');
     $ch = curl_init();
-    $url = 'https://'. ATLAS_HOST .'/login';
+    $url = 'https://'. TERMINUS_HOST .'/login';
     // set URL and other appropriate options
     curl_setopt($ch, CURLOPT_URL, $url);
     curl_setopt($ch, CURLOPT_HEADER, 0);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-    if (ATLAS_HOST == 'onebox.getpantheon.com') {
+    if (TERMINUS_HOST == 'onebox.getpantheon.com') {
       curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, FALSE);
       curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, FALSE);
     }
@@ -686,7 +698,7 @@ function drush_terminus_pantheon_auth($email=FALSE) {
 
     // Grab the UUID Now
     curl_setopt($ch, CURLOPT_COOKIE, $session);
-    curl_setopt($ch, CURLOPT_URL, 'https://'. ATLAS_HOST .'/account');
+    curl_setopt($ch, CURLOPT_URL, 'https://'. TERMINUS_HOST .'/account');
     $result = curl_exec($ch);
     $location_header = terminus_parse_drupal_headers($result, 'Location');
     if (!$location_header) {
