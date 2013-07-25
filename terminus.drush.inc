@@ -13,6 +13,9 @@ define('TERMINUS_PORT', 443);
 /**
  * An easy function to override constants to allow development internally.
  *
+ * Also bootstraps the included library functions, which are separate so people
+ * can use them outside the context of Drush.
+ *
  * TODO: use for other settings.
  */
 function terminus_bootstrap() {
@@ -147,6 +150,42 @@ function terminus_drush_command() {
     'bootstrap' => DRUSH_BOOTSTRAP_DRUSH, // No bootstrap at all.
   );
 
+  $items['pantheon-site-archives'] = array(
+    'description' => "Get site archives (exports and backups).",
+    'arguments' => array(
+      'site' => 'UUID of the site you want to get archives for.',
+    ),
+    'aliases' => array('psite-archives'),
+    'bootstrap' => DRUSH_BOOTSTRAP_DRUSH, // No bootstrap at all.
+  );
+
+  $items['pantheon-site-get-archive'] = array(
+    'description' => "Get a download link to a specific site archive.",
+    'arguments' => array(
+      'site' => 'UUID of the site you want to get archives for.',
+    ),
+    'arguments' => array(
+      'archives' => 'UUID of the site you want to get archives for.',
+    ),
+    'aliases' => array('psite-get-archive'),
+    'bootstrap' => DRUSH_BOOTSTRAP_DRUSH, // No bootstrap at all.
+  );
+
+  $items['pantheon-site-backup'] = array(
+    'description' => "Trigger an on-demand backup for a site/environment.",
+    'arguments' => array(
+      'site' => 'UUID of the site you want to make a backup for.',
+    ),
+    'environment' => array(
+      'archives' => 'The environment (e.g. "live") you want to back up.',
+    ),
+    'aliases' => array('psite-backup'),
+    'bootstrap' => DRUSH_BOOTSTRAP_DRUSH, // No bootstrap at all.
+  );
+
+  /**
+   * Other Utility Functions.
+   */
   $items['pantheon-aliases'] = array(
     'description' => "Update the Pantheon Drush alias file at ~/.drush/pantheon.aliases.drushrc.php.",
     'options' => array(
@@ -233,7 +272,7 @@ function drush_terminus_pantheon_site_create($name = FALSE) {
     return FALSE;
   }
   if (drush_get_option('json')) {
-    drush_print(json_decode($result['json']));
+    drush_print($result['json']);
     return TRUE;
   }
   drush_log("Site is building now in your dashboard.", "ok");
@@ -243,7 +282,7 @@ function drush_terminus_pantheon_site_create($name = FALSE) {
 }
 
 /**
- * Create a new site via the CLI.
+ * Delete a site via the CLI.
  */
 function drush_terminus_pantheon_site_delete($site_uuid = FALSE) {
   $data = terminus_session_data();
@@ -265,6 +304,90 @@ function drush_terminus_pantheon_site_delete($site_uuid = FALSE) {
   return TRUE;
 }
 
+/**
+ * Get a list of archives for a site.
+ */
+function drush_terminus_pantheon_site_archives($site_uuid = FALSE) {
+  $data = terminus_session_data();
+  if (!$data) {
+    drush_log('You are not authenticated', 'failed');
+    return FALSE;
+  }
+  if (!$site_uuid) {
+    drush_log('You must supply a site UUID', 'failed');
+    return FALSE;
+  }
+  // Include archive commands.
+  include_once('terminus.archive.api.inc');
+  $result = terminus_api_archive_check($site_uuid);
+  if (drush_get_option('json')) {
+    drush_print($result['json']);
+    return TRUE;
+  }
+  $rows = array();
+  $archives = json_decode($result['json']);
+  foreach ($archives as $a) {
+    $rows[$a->date] = array($a->date, $a->name, $a->size);
+  }
+  krsort($rows);
+  array_unshift($rows, array("Download", "Date", "Size"));
+  drush_print_table($rows, TRUE);
+}
+
+/**
+ * Get a list of archives for a site.
+ */
+function drush_terminus_pantheon_site_get_archive($site_uuid = FALSE, $archive = FALSE) {
+  $data = terminus_session_data();
+  if (!$data) {
+    drush_log('You are not authenticated', 'failed');
+    return FALSE;
+  }
+  if (!$site_uuid) {
+    drush_log('You must supply a site UUID', 'failed');
+    return FALSE;
+  }
+  if (!$archive) {
+    drush_log('You must supply a specific archive', 'failed');
+    return FALSE;
+  }
+  // Include archive commands.
+  include_once('terminus.archive.api.inc');
+  $result = terminus_api_archive_download_info($site_uuid, $archive);
+  if (drush_get_option('json')) {
+    drush_print($result['json']);
+    return TRUE;
+  }
+  $data = json_decode($result['json']);
+  drush_print(dt('Signed url for archive from !date', array('!date' => $data->date)));
+  drush_print(dt('A !size Mb download', array('!size' => round($data->size/(1024*1024), 2))));
+  drush_print($data->url);
+  return TRUE;
+}
+
+/**
+ * Make a backup. Uses more generic archive api.
+ */
+function drush_terminus_pantheon_site_backup($site_uuid, $environment) {
+  $data = terminus_session_data();
+  if (!$data) {
+    drush_log('You are not authenticated', 'failed');
+    return FALSE;
+  }
+  if (!$site_uuid) {
+    drush_log('You must supply a site UUID', 'failed');
+    return FALSE;
+  }
+  if (!$environment) {
+    drush_log('You must supply an environment', 'failed');
+    return FALSE;
+  }
+  // Include archive commands.
+  include_once('terminus.archive.api.inc');
+  $result = terminus_api_environment_site_archive($site_uuid, $environment, 'backups');
+  drush_print("Backup initiated.");
+  return TRUE;
+}
 
 /**
  * Update alias list.
@@ -533,7 +656,7 @@ function terminus_request($realm, $uuid, $path = FALSE, $method = 'GET', $data =
     CURLOPT_HEADER => 1,
     CURLOPT_PORT => TERMINUS_PORT,
     CURLOPT_RETURNTRANSFER => 1,
-    CURLOPT_TIMEOUT => 5,
+    CURLOPT_TIMEOUT => 30,
     CURLOPT_CUSTOMREQUEST => $method,
     CURLOPT_COOKIE => $session,
     CURLOPT_HTTPHEADER => $headers,
