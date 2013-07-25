@@ -13,6 +13,9 @@ define('TERMINUS_PORT', 443);
 /**
  * An easy function to override constants to allow development internally.
  *
+ * Also bootstraps the included library functions, which are separate so people
+ * can use them outside the context of Drush.
+ *
  * TODO: use for other settings.
  */
 function terminus_bootstrap() {
@@ -147,6 +150,19 @@ function terminus_drush_command() {
     'bootstrap' => DRUSH_BOOTSTRAP_DRUSH, // No bootstrap at all.
   );
 
+  $items['pantheon-site-archives'] = array(
+    'description' => "Get site archives (exports and backups).",
+    'arguments' => array(
+      'site' => 'UUID of the site you want to get archives for.',
+    ),
+    'aliases' => array('psite-archives'),
+    'bootstrap' => DRUSH_BOOTSTRAP_DRUSH, // No bootstrap at all.
+  );
+
+  /**
+   * Other Utility Functions.
+   */
+
   $items['pantheon-aliases'] = array(
     'description' => "Update the Pantheon Drush alias file at ~/.drush/pantheon.aliases.drushrc.php.",
     'options' => array(
@@ -243,7 +259,7 @@ function drush_terminus_pantheon_site_create($name = FALSE) {
 }
 
 /**
- * Create a new site via the CLI.
+ * Delete a site via the CLI.
  */
 function drush_terminus_pantheon_site_delete($site_uuid = FALSE) {
   $data = terminus_session_data();
@@ -262,6 +278,24 @@ function drush_terminus_pantheon_site_delete($site_uuid = FALSE) {
   $result = terminus_request('site', $site_uuid, '', DELETE);
   drush_log("Site deleted.", "ok");
   drush_cache_clear_all('terminus-sites', 'pantheon');
+  return TRUE;
+}
+
+/**
+ * Get a list of archives for a site.
+ */
+function drush_terminus_pantheon_site_archives($site_uuid = FALSE) {
+  $data = terminus_session_data();
+  if (!$data) {
+    drush_log('You are not authenticated', 'failed');
+    return FALSE;
+  }
+  if (!$site_uuid) {
+    drush_log('You must supply a site UUID', 'failed');
+    return FALSE;
+  }
+  include_once('terminus.archive.api.inc');
+  $result = terminus_api_archive_check($site_uuid);
   return TRUE;
 }
 
