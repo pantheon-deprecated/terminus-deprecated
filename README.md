@@ -15,6 +15,8 @@ Quick Demo
     drush pantheon-sites
     drush pantheon-aliases
 
+You'll find many more fun commands in "drush help".
+
 TODO
 ====
 
@@ -22,5 +24,6 @@ TODO
 - Site import
 - Workflow operations
 - Team management
-- Websockets support for real-time status info
+- In-progress job status
+- Websockets support for real-time status info?
 - A "pantheon shell" option to keep people in context for interactive use
