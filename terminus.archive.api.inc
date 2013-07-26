@@ -1,39 +1,40 @@
 <?php
 
 /**
- * API Call to Check Archive Status
+ * API call to get the backup catalog.
  */
-function terminus_api_archive_check($site_uuid) {
+function terminus_api_backup_catalog($site_uuid, $environment) {
   $realm = 'site';
   $uuid = $site_uuid;
-  $path = 'archive';
+  $path = 'environments/'. $environment .'/backups/catalog';
   $method = 'GET';
   $data = NULL;
   return terminus_request($realm, $uuid, $path, $method, $data);
 }
 
 /**
- * API Call to Get Archive Download Info
+ * API call to get a single backup item's S3 token
  */
-function terminus_api_archive_download_info($site_uuid, $archive) {
+function terminus_api_backup_download_url($site_uuid, $environment, $bucket, $element) {
   $realm = 'site';
   $uuid = $site_uuid;
-  $path = 'archive/' . str_replace('/', '%2F', $archive);
-  $method = 'GET';
-  $data = NULL;
+  $path = 'environments/'. $environment .'/backups/catalog/'. $bucket .'/'. $element .'/s3token';
+  $method = 'POST';
+  $data = array('method' => 'GET');
   return terminus_request($realm, $uuid, $path, $method, $data);
 }
 
 /**
- * API Function to Make a Backup
+ * API Function to make a backup.
  */
-function terminus_api_environment_site_archive($site_uuid, $environment, $folder, $code = TRUE, $db = TRUE, $files = TRUE) {
+function terminus_api_environment_site_backup($site_uuid, $environment, $entry_type = 'export', $code = TRUE, $db = TRUE, $files = TRUE) {
   $realm = 'site';
   $uuid = $site_uuid;
-  $path = 'environments/' . $environment . '/export';
+  $path = 'environments/' . $environment . '/backups/create';
   $method = 'POST';
   $data = array(
-      'folder' => ($folder == 'downloads') ? $folder . '/' . 'latest/' . $environment : $folder. '/' . time() . '/' . $environment,
+      'entry_type' => $entry_type,
+      'scheduled_for' => time(),
       'code' => ($code) ? 1 : 0,
       'database' => ($db) ? 1 : 0,
       'files' => ($files) ? 1 : 0,
