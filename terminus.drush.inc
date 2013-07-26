@@ -150,34 +150,32 @@ function terminus_drush_command() {
     'bootstrap' => DRUSH_BOOTSTRAP_DRUSH, // No bootstrap at all.
   );
 
-  $items['pantheon-site-archives'] = array(
-    'description' => "Get site archives (exports and backups).",
+  $items['pantheon-site-backups'] = array(
+    'description' => "List site backups (and exports).",
     'arguments' => array(
-      'site' => 'UUID of the site you want to get archives for.',
+      'site' => 'UUID of the site you want to get backups for.',
     ),
-    'aliases' => array('psite-archives'),
+    'aliases' => array('psite-backups'),
     'bootstrap' => DRUSH_BOOTSTRAP_DRUSH, // No bootstrap at all.
   );
 
-  $items['pantheon-site-get-archive'] = array(
-    'description' => "Get a download link to a specific site archive.",
+  $items['pantheon-site-get-backup'] = array(
+    'description' => "Get a download link to a specific site backup.",
     'arguments' => array(
-      'site' => 'UUID of the site you want to get archives for.',
+      'site' => 'UUID of the site you want to get backups for.',
+      'environment' => 'The environment (e.g. "live") you want to back up.',
+      'bucket' => 'Bucket for the backup.',
+      'element' => 'Which part of the backup do you want?',
     ),
-    'arguments' => array(
-      'archives' => 'UUID of the site you want to get archives for.',
-    ),
-    'aliases' => array('psite-get-archive'),
+    'aliases' => array('psite-get-backup'),
     'bootstrap' => DRUSH_BOOTSTRAP_DRUSH, // No bootstrap at all.
   );
 
-  $items['pantheon-site-backup'] = array(
+  $items['pantheon-site-make-backup'] = array(
     'description' => "Trigger an on-demand backup for a site/environment.",
     'arguments' => array(
       'site' => 'UUID of the site you want to make a backup for.',
-    ),
-    'environment' => array(
-      'archives' => 'The environment (e.g. "live") you want to back up.',
+      'environment' => 'The environment (e.g. "live") you want to back up.',
     ),
     'aliases' => array('psite-backup'),
     'bootstrap' => DRUSH_BOOTSTRAP_DRUSH, // No bootstrap at all.
@@ -305,9 +303,9 @@ function drush_terminus_pantheon_site_delete($site_uuid = FALSE) {
 }
 
 /**
- * Get a list of archives for a site.
+ * Get a list of backups for a site.
  */
-function drush_terminus_pantheon_site_archives($site_uuid = FALSE) {
+function drush_terminus_pantheon_site_backups($site_uuid = FALSE, $environment = FALSE) {
   $data = terminus_session_data();
   if (!$data) {
     drush_log('You are not authenticated', 'failed');
@@ -317,27 +315,34 @@ function drush_terminus_pantheon_site_archives($site_uuid = FALSE) {
     drush_log('You must supply a site UUID', 'failed');
     return FALSE;
   }
-  // Include archive commands.
-  include_once('terminus.archive.api.inc');
-  $result = terminus_api_archive_check($site_uuid);
-  if (drush_get_option('json')) {
-    drush_print($result['json']);
-    return TRUE;
-  }
+  // Include backup commands.
+  include_once('terminus.backup.api.inc');
+  $result = terminus_api_backup_catalog($site_uuid, $environment);
+  date_default_timezone_set('UTC');
   $rows = array();
-  $archives = json_decode($result['json']);
-  foreach ($archives as $a) {
-    $rows[$a->date] = array($a->date, $a->name, $a->size);
+  $backups = json_decode($result['json']);
+  foreach ($backups as $id => $a) {
+    if (!isset($a->filename)) {
+      continue;
+    }
+    $parts = explode('_', $id);
+    $type = strpos($id, 'backup') ? 'backup' : 'export';
+    $size = round($a->size/(1024*1024), 2) .' MB';
+    $rows[$a->filename] = array($type, date(DATE_RFC822, $a->timestamp), $parts[2], $parts[0] .'_'. $parts[1], $size);
   }
   krsort($rows);
-  array_unshift($rows, array("Download", "Date", "Size"));
+  if (drush_get_option('json')) {
+    drush_print(json_encode($rows));
+    return TRUE;
+  }
+  array_unshift($rows, array("Type", "Date", "Element", "Bucket", "Size"));
   drush_print_table($rows, TRUE);
 }
 
 /**
- * Get a list of archives for a site.
+ * Get a list of backups for a site.
  */
-function drush_terminus_pantheon_site_get_archive($site_uuid = FALSE, $archive = FALSE) {
+function drush_terminus_pantheon_site_get_backup($site_uuid = FALSE, $environment = FALSE, $bucket = FALSE, $element = FALSE) {
   $data = terminus_session_data();
   if (!$data) {
     drush_log('You are not authenticated', 'failed');
@@ -347,26 +352,25 @@ function drush_terminus_pantheon_site_get_archive($site_uuid = FALSE, $archive =
     drush_log('You must supply a site UUID', 'failed');
     return FALSE;
   }
-  if (!$archive) {
-    drush_log('You must supply a specific archive', 'failed');
+  if (!$environment) {
+    drush_log('You must supply a specific environment', 'failed');
     return FALSE;
   }
-  // Include archive commands.
-  include_once('terminus.archive.api.inc');
-  $result = terminus_api_archive_download_info($site_uuid, $archive);
+  // Include backup commands.
+  include_once('terminus.backup.api.inc');
+  $result = terminus_api_backup_download_url($site_uuid, $environment, $bucket, $element);
   if (drush_get_option('json')) {
     drush_print($result['json']);
     return TRUE;
   }
   $data = json_decode($result['json']);
-  drush_print(dt('Signed url for archive from !date', array('!date' => $data->date)));
-  drush_print(dt('A !size Mb download', array('!size' => round($data->size/(1024*1024), 2))));
+  drush_print(dt('Signed url for the backup:'));
   drush_print($data->url);
   return TRUE;
 }
 
 /**
- * Make a backup. Uses more generic archive api.
+ * Make a backup. Uses more generic backup api.
  */
 function drush_terminus_pantheon_site_backup($site_uuid, $environment) {
   $data = terminus_session_data();
@@ -382,9 +386,9 @@ function drush_terminus_pantheon_site_backup($site_uuid, $environment) {
     drush_log('You must supply an environment', 'failed');
     return FALSE;
   }
-  // Include archive commands.
-  include_once('terminus.archive.api.inc');
-  $result = terminus_api_environment_site_archive($site_uuid, $environment, 'backups');
+  // Include backup commands.
+  include_once('terminus.backup.api.inc');
+  $result = terminus_api_environment_site_backup($site_uuid, $environment, 'backups');
   drush_print("Backup initiated.");
   return TRUE;
 }
