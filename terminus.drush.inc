@@ -18,11 +18,25 @@ define('TERMINUS_PORT', 443);
  *
  * TODO: use for other settings.
  */
-function terminus_bootstrap() {
-  $data = terminus_session_data();
-  if (drush_get_option('onebox')) {
-    define('TERMINUS_HOST', 'onebox.getpantheon.com');
+function terminus_bootstrap($validate = TRUE) {
+  include_once('terminus.backup.api.inc');
+  include_once('terminus.site.api.inc');
+  include_once('terminus.user.api.inc');
+  $session_data = terminus_session_data();
+  // DRY session validation.
+  if ($validate) {
+    if (!isset($session_data['user_uuid'])) {
+      return drush_set_error("No user UUID found. Please authenticate first using 'drush pauth'");
+    }
   }
+  // Common command flags.
+  $session_data['nocache'] = drush_get_option('nocache');
+  $session_data['json'] = drush_get_option('json');
+  if (isset($session_data['onebox']) || drush_get_option('onebox')) {
+    $session_data['onebox'] = TRUE;
+  }
+
+  return $session_data;
 }
 
 /**
@@ -36,6 +50,15 @@ function terminus_bootstrap() {
 function terminus_drush_command() {
   $items = array();
 
+  $items['pantheon-logout'] = array(
+    'description' => "Clear any stored session data.",
+    'examples' => array(
+      'drush plogout',
+    ),
+    'aliases' => array('plogout'),
+    'bootstrap' => DRUSH_BOOTSTRAP_DRUSH, // No bootstrap at all.
+  );
+
   // The 'pantheon-authenticate' command
   $items['pantheon-auth'] = array(
     'description' => "Authenticate against the pantheon dashboard. Required before doing anything else.",
@@ -47,9 +70,6 @@ function terminus_drush_command() {
         'description' => 'Optional: include password for script-friendly use.',
         'example-value' => 'mypassword',
       ),
-      'nocache' => array(
-        'description' => 'Force a refresh of cached authentication session.',
-      ),
     ),
     'examples' => array(
       'drush pauth josh@getpantheon.com --password=mypassword' => 'Get authentication token.',
@@ -58,26 +78,10 @@ function terminus_drush_command() {
     'bootstrap' => DRUSH_BOOTSTRAP_DRUSH, // No bootstrap at all.
   );
 
-  $items['pantheon-logout'] = array(
-    'description' => "Clear any stored session data.",
-    'examples' => array(
-      'drush plogout',
-    ),
-    'aliases' => array('plogout'),
-    'bootstrap' => DRUSH_BOOTSTRAP_DRUSH, // No bootstrap at all.
-  );
 
   // The 'pantheon-sitelist' command
   $items['pantheon-sites'] = array(
     'description' => "List your sites.",
-    'options' => array(
-      'nocache' => array(
-        'description' => 'Force a refresh of cached authentication session.',
-      ),
-      'json' => array(
-        'description' => 'Return output in JSON. Useful for scripting.',
-      ),
-    ),
     'examples' => array(
       'drush psites --nocache' => 'Get a fresh list of sites.',
     ),
@@ -109,14 +113,6 @@ function terminus_drush_command() {
 
   $items['pantheon-products'] = array(
     'description' => "Get the list of available Drupal product start-states.",
-    'options' => array(
-      'nocache' => array(
-        'description' => 'Force a refresh of cached authentication session.',
-      ),
-      'json' => array(
-        'description' => 'Return output in JSON. Useful for scripting.',
-      ),
-    ),
     'aliases' => array('pproducts'),
     'bootstrap' => DRUSH_BOOTSTRAP_DRUSH, // No bootstrap at all.
   );
@@ -181,8 +177,9 @@ function terminus_drush_command() {
     'bootstrap' => DRUSH_BOOTSTRAP_DRUSH, // No bootstrap at all.
   );
 
+
   /**
-   * Other Utility Functions.
+   * Utility Functions.
    */
   $items['pantheon-aliases'] = array(
     'description' => "Update the Pantheon Drush alias file at ~/.drush/pantheon.aliases.drushrc.php.",
@@ -201,17 +198,28 @@ function terminus_drush_command() {
       'realm' => 'Are you asking about users or sites?',
       'uuid' => 'The unique id of the thing you want to know about.',
       'path' => 'Optional: path extension for more specific commands.',
-      'json' => 'Optional: return simple JSON; good for scripting.',
     ),
     'aliases' => array('pp'),
     'bootstrap' => DRUSH_BOOTSTRAP_DRUSH, // No bootstrap at all.
   );
 
-  $items['pantheon-whoami'] = array(
-    'description' => "Information about you the user.",
-    'aliases' => array('pme'),
-    'bootstrap' => DRUSH_BOOTSTRAP_DRUSH, // No bootstrap at all.
+  // Include standard options for all commands:
+  $common = array(
+    'nocache' => array(
+      'description' => 'Force a refresh of cached authentication session.',
+    ),
+    'json' => array('description' => 'Return raw JSON if possible.'),
+    'onebox' => array('description' => 'Use onebox (Pantheon dev only).'),
   );
+
+  foreach ($items as $key => $array) {
+    if (isset($array['options'])) {
+      $items[$key]['options'] = array_merge($items[$key]['options'], $common);
+    }
+    else {
+      $items[$key]['options'] = $common;
+    }
+  }
 
   return $items;
 }
@@ -227,13 +235,11 @@ function terminus_drush_command() {
  * User data about self.
  */
 function drush_terminus_pantheon_whoami() {
-  $data = terminus_session_data();
-  if (!$data) {
-    drush_log('You are not authenticated', 'failed');
-    return FALSE;
-  }
-  drush_print(dt("User UUID: !uuid", array('!uuid' => $data['user_uuid'])));
-  drush_print(dt("Email: !email", array('!email' => $data['email'])));
+  $session_data = terminus_session_data();
+  // import to local scope variables
+  extract($session_data);
+  drush_print(dt("User UUID: !uuid", array('!uuid' => $user_uuid)));
+  drush_print(dt("Email: !email", array('!email' => $email)));
   return TRUE;
 }
 
@@ -242,15 +248,15 @@ function drush_terminus_pantheon_whoami() {
  * Get a list of sites.
  */
 function drush_terminus_pantheon_sites() {
-  $user_uuid = terminus_session_data('user_uuid');
-  $nocache = drush_get_option('nocache');
-  $cid = 'terminus-sites';
-  $json_output = drush_get_option('json');
-  if (!$user_uuid) {
-    return drush_set_error("No user UUID found. Please authenticate first: drush pauth");
+  $session_data = terminus_bootstrap();
+
+  if ($session_data === FALSE) {
+    return FALSE;
   }
+  extract($session_data);
+
+  $cid = 'terminus-sites';
   if ($nocache || !$cache = drush_cache_get($cid, 'pantheon')) {
-    include_once('terminus.user.api.inc');
     drush_log('Loading site data from Pantheon.', 'notice');
     $result = terminus_api_user_site_list($user_uuid);
     if ($result === FALSE) {
@@ -285,17 +291,17 @@ function drush_terminus_pantheon_sites() {
  * Create a new site via the CLI.
  */
 function drush_terminus_pantheon_site_create($name = FALSE) {
-  $data = terminus_session_data();
-  if (!$data) {
-    drush_log('You are not authenticated', 'failed');
+  $session_data = terminus_bootstrap();
+  if ($session_data === FALSE) {
     return FALSE;
   }
+  extract($session_data);
   if (!$name) {
     drush_log('You must supply a site name', 'failed');
     return FALSE;
   }
 
-  # Construct payload. We don't want empty/null values.
+  // Construct payload. We don't want empty/null values.
   $site_data = array();
   $site_data['name'] = preg_replace("/[^A-Za-z0-9 ]/", '', $name);
   if (drush_get_option('label')) {
@@ -327,11 +333,11 @@ function drush_terminus_pantheon_site_create($name = FALSE) {
  * Delete a site via the CLI.
  */
 function drush_terminus_pantheon_site_delete($site_uuid = FALSE) {
-  $data = terminus_session_data();
-  if (!$data) {
-    drush_log('You are not authenticated', 'failed');
+  $session_data = terminus_bootstrap();
+  if ($session_data === FALSE) {
     return FALSE;
   }
+  extract($session_data);
   if (!$site_uuid) {
     drush_log('You must supply a site UUID', 'failed');
     return FALSE;
@@ -340,7 +346,7 @@ function drush_terminus_pantheon_site_delete($site_uuid = FALSE) {
   if (!$confirm) {
     return TRUE;
   }
-  include_once('terminus.site.api.inc');
+
   $result = terminus_api_site_delete($site_uuid);
   drush_log("Site deleted.", "ok");
   drush_cache_clear_all('terminus-sites', 'pantheon');
@@ -379,17 +385,17 @@ function drush_terminus_pantheon_hostname_remove($site, $environment, $hostname)
  * Get a list of backups for a site.
  */
 function drush_terminus_pantheon_site_backups($site_uuid = FALSE, $environment = FALSE) {
-  $data = terminus_session_data();
-  if (!$data) {
-    drush_log('You are not authenticated', 'failed');
+  $session_data = terminus_bootstrap();
+  if ($session_data === FALSE) {
     return FALSE;
   }
+  extract($session_data);
+
   if (!$site_uuid) {
     drush_log('You must supply a site UUID', 'failed');
     return FALSE;
   }
-  // Include backup commands.
-  include_once('terminus.backup.api.inc');
+
   $result = terminus_api_backup_catalog($site_uuid, $environment);
   date_default_timezone_set('UTC');
   $rows = array();
@@ -416,11 +422,12 @@ function drush_terminus_pantheon_site_backups($site_uuid = FALSE, $environment =
  * Get a list of backups for a site.
  */
 function drush_terminus_pantheon_site_get_backup($site_uuid = FALSE, $environment = FALSE, $bucket = FALSE, $element = FALSE) {
-  $data = terminus_session_data();
-  if (!$data) {
-    drush_log('You are not authenticated', 'failed');
+  $session_data = terminus_bootstrap();
+  if ($session_data === FALSE) {
     return FALSE;
   }
+  extract($session_data);
+
   if (!$site_uuid) {
     drush_log('You must supply a site UUID', 'failed');
     return FALSE;
@@ -429,8 +436,7 @@ function drush_terminus_pantheon_site_get_backup($site_uuid = FALSE, $environmen
     drush_log('You must supply a specific environment', 'failed');
     return FALSE;
   }
-  // Include backup commands.
-  include_once('terminus.backup.api.inc');
+
   $result = terminus_api_backup_download_url($site_uuid, $environment, $bucket, $element);
   if (drush_get_option('json')) {
     drush_print($result['json']);
@@ -459,8 +465,7 @@ function drush_terminus_pantheon_site_make_backup($site_uuid, $environment) {
     drush_log('You must supply an environment', 'failed');
     return FALSE;
   }
-  // Include backup commands.
-  include_once('terminus.backup.api.inc');
+
   $result = terminus_api_site_make_backup($site_uuid, $environment, 'backup');
   drush_print("Backup initiated.");
   return TRUE;
@@ -637,10 +642,14 @@ function terminus_request($realm, $uuid, $path = FALSE, $method = 'GET', $data =
     $ch = curl_init();
   }
   $headers = array();
-  $session  = terminus_session_data('session');
-  // TODO: don't use pp.php.
-  // We will need something else we can lock down if needed.
-  $url = 'https://'. TERMINUS_HOST .'/terminus.php?'. $realm .'='. $uuid;
+  $session_data = terminus_bootstrap(FALSE);
+  $host = TERMINUS_HOST;
+  if ($session_data['onebox']) {
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, FALSE);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, FALSE);
+    $host = 'onebox.getpantheon.com';
+  }
+  $url = 'https://'. $host .'/terminus.php?'. $realm .'='. $uuid;
   if ($path) {
     $url .= '&path='. urlencode($path);
   }
@@ -666,16 +675,10 @@ function terminus_request($realm, $uuid, $path = FALSE, $method = 'GET', $data =
     CURLOPT_RETURNTRANSFER => 1,
     CURLOPT_TIMEOUT => 30,
     CURLOPT_CUSTOMREQUEST => $method,
-    CURLOPT_COOKIE => $session,
+    CURLOPT_COOKIE => $session_data['session'],
     CURLOPT_HTTPHEADER => $headers,
   );
   curl_setopt_array($ch, $opts);
-
-  if (TERMINUS_HOST == 'onebox.getpantheon.com') {
-    // Allow debugging to work against a onebox.
-    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, FALSE);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, FALSE);
-  }
 
   // grab URL and pass it to the browser
   drush_log('Making api request.', 'notice');
@@ -732,15 +735,15 @@ function _terminus_service_level_name($level) {
  * Many thanks to Amitai and the gang at: https://drupal.org/node/89710
  *
  */
-function drush_terminus_pantheon_auth($email=FALSE) {
+function drush_terminus_pantheon_auth($email = FALSE) {
     // Flush existing data.
     drush_cache_clear_all('*', 'pantheon', TRUE);
+    $session_data = terminus_bootstrap(FALSE);
     if (!$email) {
       $email = drush_prompt(dt('Pantheon account email address'), NULL, TRUE);
     }
     $nocache = drush_get_option('nocache');
-    $session_data = terminus_session_data();
-    if (!$nocache && $session_data) {
+    if (!$nocache && isset($session_data['email'])) {
       drush_log(dt('Cached auth found for !email', array('!email' => $email)), 'notice');
       if (terminus_validate_session($session_data)) {
         drush_log('Session still valid. Good to go!', 'ok');
@@ -749,29 +752,22 @@ function drush_terminus_pantheon_auth($email=FALSE) {
     }
     $password = drush_get_option('password');
     if (!$password) {
-      // Hide password input in the clear.
-      // TODO: consider an alternative ways to start a session using a shared
-      // secret key. This would allow us to differentiate between dashboard
-      // users and drush users.
-      /*
-      drush_print("Pantheon dashboard password: ");
-      system('stty -echo');
-      $password = trim(fgets(STDIN));
-      system('stty echo');
-      */
       $password = drush_prompt(dt('Pantheon dashboard password'), NULL, TRUE, TRUE);
     }
     drush_log(dt('Authenticating as !email', array('!email' => $email)), 'ok');
     $ch = curl_init();
-    $url = 'https://'. TERMINUS_HOST .'/login';
+    $host = TERMINUS_HOST;
+    if ($session_data['onebox']) {
+      curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, FALSE);
+      curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, FALSE);
+      $host = 'onebox.getpantheon.com';
+    }
+    $url = 'https://'. $host .'/login';
+    drush_log(dt('POSTing auth to: !url', array('!url' => $url)));
     // set URL and other appropriate options
     curl_setopt($ch, CURLOPT_URL, $url);
     curl_setopt($ch, CURLOPT_HEADER, 0);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-    if (TERMINUS_HOST == 'onebox.getpantheon.com') {
-      curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, FALSE);
-      curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, FALSE);
-    }
 
     // grab URL and pass it to the browser
     $result = curl_exec($ch);
@@ -811,7 +807,6 @@ function drush_terminus_pantheon_auth($email=FALSE) {
       $err = curl_error($ch);
       return drush_set_error("Dashboard unavailable", "Dashboard unavailable: $err");
     }
-
     $set_cookie_header = terminus_parse_drupal_headers($result, 'Set-Cookie');
     if (!$set_cookie_header) {
       return drush_set_error("Failure!", 'Authentication failed. Please check your credentials and try again.');
@@ -829,7 +824,7 @@ function drush_terminus_pantheon_auth($email=FALSE) {
 
     // Grab the UUID Now
     curl_setopt($ch, CURLOPT_COOKIE, $session);
-    curl_setopt($ch, CURLOPT_URL, 'https://'. TERMINUS_HOST .'/account');
+    curl_setopt($ch, CURLOPT_URL, 'https://'. $host .'/account');
     $result = curl_exec($ch);
     $location_header = terminus_parse_drupal_headers($result, 'Location');
     if (!$location_header) {
@@ -842,6 +837,11 @@ function drush_terminus_pantheon_auth($email=FALSE) {
 
     // Start socking away new data.
     $data = array('user_uuid' => $user_uuid, 'session' => $session, 'email' => $email);
+    if ($session_data['onebox']) {
+      // Mark this session as "forever onebox."
+      $data['onebox'] = TRUE;
+    }
+
     drush_cache_set('terminus-current-session', $data, 'pantheon');
 
     // Store the session in drush cache.

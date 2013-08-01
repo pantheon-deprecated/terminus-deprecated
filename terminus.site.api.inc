@@ -60,7 +60,7 @@ function terminus_api_site_put_service_level($site_uuid, $level) {
   $uuid = $site_uuid;
   $path = 'service-level';
   $method = 'PUT';
-  $data = $level
+  $data = $level;
   $result = terminus_request($realm, $uuid, $path, $method, $data);
 }
 
@@ -72,7 +72,7 @@ function terminus_api_site_attributes_set($site_uuid, $attributes) {
   $uuid = $site_uuid;
   $path = 'attributes';
   $method = 'PUT';
-  $data = $attributes
+  $data = $attributes;
   return terminus_request($realm, $uuid, $path, $method, $data);
 }
 
@@ -84,7 +84,7 @@ function terminus_api_site_attribute_set($site_uuid, $attribute, $value) {
   $uuid = $site_uuid;
   $path = 'attributes/' . $attribute;
   $method = 'PUT';
-  $data = $value
+  $data = $value;
   return terminus_request($realm, $uuid, $path, $method, $data);
 }
 

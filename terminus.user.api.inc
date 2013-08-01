@@ -8,8 +8,8 @@
  * API Call to Get One User's Data
  */
 function terminus_api_user_get($user_uuid) {
-  $realm = 'user'
-  $uuid = $user_uuid
+  $realm = 'user';
+  $uuid = $user_uuid;
   $path = '';
   $method = 'GET';
 
@@ -20,8 +20,8 @@ function terminus_api_user_get($user_uuid) {
  * API Call to Get a User Profile
  */
 function terminus_api_user_profile_get($user_uuid) {
-  $realm = 'user'
-  $uuid = $user_uuid
+  $realm = 'user';
+  $uuid = $user_uuid;
   $path = 'profile';
   $method = 'GET';
 
@@ -34,8 +34,8 @@ function terminus_api_user_profile_get($user_uuid) {
  * TODO: this should be handled as part of the overall user_get
  */
 function terminus_api_user_organizations_get($user_uuid) {
-  $realm = 'user'
-  $uuid = $user_uuid
+  $realm = 'user';
+  $uuid = $user_uuid;
   $path = 'organizations';
   $method = 'GET';
 
@@ -46,8 +46,8 @@ function terminus_api_user_organizations_get($user_uuid) {
  * API Call to Set a User Profile
  */
 function terminus_api_user_profile_set($user_uuid, $profile) {
-  $realm = 'user'
-  $uuid = $user_uuid
+  $realm = 'user';
+  $uuid = $user_uuid;
   $path = 'profile';
   $method = 'PUT';
   $data = $profile;
@@ -59,8 +59,8 @@ function terminus_api_user_profile_set($user_uuid, $profile) {
  * API Call to Update/Patch a User Profile
  */
 function terminus_api_user_profile_update($user_uuid, $profile) {
-  $realm = 'user'
-  $uuid = $user_uuid
+  $realm = 'user';
+  $uuid = $user_uuid;
   $path = 'profile';
   $method = 'PATCH';
   $data = $profile;
@@ -72,8 +72,8 @@ function terminus_api_user_profile_update($user_uuid, $profile) {
  * API Call to Get a Field from a User Profile
  */
 function terminus_api_user_profile_get_attribute($user_uuid, $attribute) {
-  $realm = 'user'
-  $uuid = $user_uuid
+  $realm = 'user';
+  $uuid = $user_uuid;
   $path = 'profile/' . $attribute;
   $method = 'GET';
 
@@ -84,8 +84,8 @@ function terminus_api_user_profile_get_attribute($user_uuid, $attribute) {
  * API Call to Set a Field from a User Profile
  */
 function terminus_api_user_profile_set_attribute($user_uuid, $attribute, $value) {
-  $realm = 'user'
-  $uuid = $user_uuid
+  $realm = 'user';
+  $uuid = $user_uuid;
   $path = 'profile/' . $attribute;
   $method = 'PUT';
   $data = $value;
@@ -97,8 +97,8 @@ function terminus_api_user_profile_set_attribute($user_uuid, $attribute, $value)
  * API Call to Set a User's Password
  */
 function terminus_api_user_password_set($user_uuid, $password) {
-  $realm = 'user'
-  $uuid = $user_uuid
+  $realm = 'user';
+  $uuid = $user_uuid;
   $path = 'password';
   $method = 'PUT';
   $data = $password;
@@ -111,8 +111,8 @@ function terminus_api_user_password_set($user_uuid, $password) {
  * Note - No logging!
  */
 function terminus_api_user_email_get($user_uuid) {
-  $realm = 'user'
-  $uuid = $user_uuid
+  $realm = 'user';
+  $uuid = $user_uuid;
   $path = 'email';
   $method = 'GET';
 
@@ -124,8 +124,8 @@ function terminus_api_user_email_get($user_uuid) {
  * NOTE - No logging!
  */
 function terminus_api_user_uuid_get($email) {
-  $realm = 'user'
-  $uuid = $user_uuid
+  $realm = 'user';
+  $uuid = $user_uuid;
   $path = rawurlencode($email) . '/uuid';
   $method = 'GET';
 
@@ -137,8 +137,8 @@ function terminus_api_user_uuid_get($email) {
  * NOTE - No logging!
  */
 function terminus_api_user_email_check_by_email($email) {
-  $realm = 'user'
-  $uuid = $user_uuid
+  $realm = 'user';
+  $uuid = $user_uuid;
   $path = rawurlencode($email) . '/email';
   $method = 'GET';
 
@@ -150,8 +150,8 @@ function terminus_api_user_email_check_by_email($email) {
  * API Call to Set a User's Email
  */
 function terminus_api_user_email_set($user_uuid, $email) {
-  $realm = 'user'
-  $uuid = $user_uuid
+  $realm = 'user';
+  $uuid = $user_uuid;
   $path = 'email';
   $method = 'PUT';
   $data = $email;
@@ -163,8 +163,8 @@ function terminus_api_user_email_set($user_uuid, $email) {
  * API Call to Delete a User
  */
 function terminus_api_user_delete($user_uuid) {
-  $realm = 'user'
-  $uuid = $user_uuid
+  $realm = 'user';
+  $uuid = $user_uuid;
   $method = 'DELETE';
 
   return terminus_request($realm, $uuid, $path, $method);
@@ -174,8 +174,8 @@ function terminus_api_user_delete($user_uuid) {
  * API Call to Get a User's SSH Keys
  */
 function terminus_api_user_sshkey_get($user_uuid) {
-  $realm = 'user'
-  $uuid = $user_uuid
+  $realm = 'user';
+  $uuid = $user_uuid;
   $path = 'keys';
   $method = 'GET';
 
@@ -186,8 +186,8 @@ function terminus_api_user_sshkey_get($user_uuid) {
  * API Call to Delete a User's SSH Keys
  */
 function terminus_api_user_sshkey_delete_all($user_uuid) {
-  $realm = 'user'
-  $uuid = $user_uuid
+  $realm = 'user';
+  $uuid = $user_uuid;
   $path = 'keys';
   $method = 'DELETE';
 
@@ -198,8 +198,8 @@ function terminus_api_user_sshkey_delete_all($user_uuid) {
  * API Call to Add a SSH Key to a User
  */
 function terminus_api_user_sshkey_add($user_uuid, $sshkey) {
-  $realm = 'user'
-  $uuid = $user_uuid
+  $realm = 'user';
+  $uuid = $user_uuid;
   $path = 'keys';
   $method = 'POST';
   $data = $sshkey;
@@ -211,8 +211,8 @@ function terminus_api_user_sshkey_add($user_uuid, $sshkey) {
  * API Call to Delete a Specific SSH for a User
  */
 function terminus_api_user_sshkey_delete_key($user_uuid, $sshkey_fingerprint) {
-  $realm = 'user'
-  $uuid = $user_uuid
+  $realm = 'user';
+  $uuid = $user_uuid;
   $path = 'keys/' . $sshkey_fingerprint;
   $method = 'DELETE';
 
@@ -224,8 +224,8 @@ function terminus_api_user_sshkey_delete_key($user_uuid, $sshkey_fingerprint) {
  * API Call to Add and Validate SSH Key
  */
 function terminus_api_sshkey_validate($user_uuid, $sshkey) {
-  $realm = 'user'
-  $uuid = $user_uuid
+  $realm = 'user';
+  $uuid = $user_uuid;
   $path = 'keys?validate=true';
   $method = 'POST';
   $data = $sshkey;
@@ -238,8 +238,8 @@ function terminus_api_sshkey_validate($user_uuid, $sshkey) {
   * API Function to Get List of Sites a User is a Team Member of
   */
 function terminus_api_user_site_list($user_uuid) {
-  $realm = 'user'
-  $uuid = $user_uuid
+  $realm = 'user';
+  $uuid = $user_uuid;
   $path = 'sites';
   $method = 'GET';
 
@@ -250,8 +250,8 @@ function terminus_api_user_site_list($user_uuid) {
   * API Function to Get List of Sites Owned by a User
   */
 function terminus_api_user_owned_list($user_uuid) {
-  $realm = 'user'
-  $uuid = $user_uuid
+  $realm = 'user';
+  $uuid = $user_uuid;
   $path = 'sites?owned=1';
   $method = 'GET';
 
