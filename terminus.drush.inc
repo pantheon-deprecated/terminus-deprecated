@@ -237,6 +237,50 @@ function drush_terminus_pantheon_whoami() {
   return TRUE;
 }
 
+
+/**
+ * Get a list of sites.
+ */
+function drush_terminus_pantheon_sites() {
+  $user_uuid = terminus_session_data('user_uuid');
+  $nocache = drush_get_option('nocache');
+  $cid = 'terminus-sites';
+  $json_output = drush_get_option('json');
+  if (!$user_uuid) {
+    return drush_set_error("No user UUID found. Please authenticate first: drush pauth");
+  }
+  if ($nocache || !$cache = drush_cache_get($cid, 'pantheon')) {
+    include_once('terminus.user.api.inc');
+    drush_log('Loading site data from Pantheon.', 'notice');
+    $result = terminus_api_user_site_list($user_uuid);
+    if ($result === FALSE) {
+      return FALSE;
+    }
+    $sites = $result['json'];
+    drush_cache_set($cid, $sites, 'pantheon');
+  }
+  else {
+    drush_log('Loaded site data from cache.', 'notice');
+    $sites = $cache->data;
+  }
+  if ($json_output) {
+    drush_print($sites);
+    return TRUE;
+  }
+
+  // Display tabular output.
+  $sites = json_decode($sites);
+  $rows = array();
+  foreach ($sites as $site_uuid => $data) {
+    $i = $data->information;
+    $rows[$i->name] = array($i->name, $i->service_level, $site_uuid);
+  }
+  ksort($rows);
+  array_unshift($rows, array("Site", "Service Level", "UUID"));
+  drush_print_table($rows, TRUE);
+}
+
+
 /**
  * Create a new site via the CLI.
  */
@@ -296,9 +340,38 @@ function drush_terminus_pantheon_site_delete($site_uuid = FALSE) {
   if (!$confirm) {
     return TRUE;
   }
-  $result = terminus_request('site', $site_uuid, '', DELETE);
+  include_once('terminus.site.api.inc');
+  $result = terminus_api_site_delete($site_uuid);
   drush_log("Site deleted.", "ok");
   drush_cache_clear_all('terminus-sites', 'pantheon');
+  return TRUE;
+}
+
+
+/**
+ * Add a hostname.
+ */
+function drush_terminus_pantheon_hostname_add($site, $environment, $hostname) {
+  $data = array('site' => $site, 'environment' => $environment);
+  $path = 'environments/'. $environment .'/hostnames/'. rawurlencode($hostname);
+  $result = terminus_request('site', $site, $path, 'PUT', $data);
+  if ($result === FALSE) {
+    return FALSE;
+  }
+  drush_log("Added '$hostname' to the $environment environment", 'ok');
+  return TRUE;
+}
+
+/**
+ * Remove a hostname.
+ */
+function drush_terminus_pantheon_hostname_remove($site, $environment, $hostname) {
+  $path = 'environments/'. $environment .'/hostnames/'. rawurlencode($hostname);
+  $result = terminus_request('site', $site, $path, 'DELETE');
+  if ($result === FALSE) {
+    return FALSE;
+  }
+  drush_log("Removed '$hostname' from the $environment environment", 'ok');
   return TRUE;
 }
 
@@ -394,7 +467,7 @@ function drush_terminus_pantheon_site_make_backup($site_uuid, $environment) {
 }
 
 /**
- * Update alias list.
+ * Update drush aliases file.
  */
 function drush_terminus_pantheon_aliases() {
   $data = terminus_session_data();
@@ -443,48 +516,6 @@ function drush_terminus_pantheon_aliases() {
   return TRUE;
 }
 
-
-/**
- * Get a list of sites.
- */
-function drush_terminus_pantheon_sites() {
-  $user_uuid = terminus_session_data('user_uuid');
-  $nocache = drush_get_option('nocache');
-  $cid = 'terminus-sites';
-  $json_output = drush_get_option('json');
-  if (!$user_uuid) {
-    return drush_set_error("No user UUID found. Please authenticate first: drush pauth");
-  }
-  if ($nocache || !$cache = drush_cache_get($cid, 'pantheon')) {
-    drush_log('Loading site data from Pantheon.', 'notice');
-    $result = terminus_request('user', $user_uuid, 'sites');
-    if ($result === FALSE) {
-      return FALSE;
-    }
-    $sites = $result['json'];
-    drush_cache_set($cid, $sites, 'pantheon');
-  }
-  else {
-    drush_log('Loaded site data from cache.', 'notice');
-    $sites = $cache->data;
-  }
-  if ($json_output) {
-    drush_print($sites);
-    return TRUE;
-  }
-
-  // Display tabular output.
-  $sites = json_decode($sites);
-  $rows = array();
-  foreach ($sites as $site_uuid => $data) {
-    $i = $data->information;
-    $rows[$i->name] = array($i->name, $i->service_level, $site_uuid);
-  }
-  ksort($rows);
-  array_unshift($rows, array("Site", "Service Level", "UUID"));
-  drush_print_table($rows, TRUE);
-}
-
 /**
  * API Debugging command. Try out anything you like.
  */
@@ -493,33 +524,6 @@ function drush_terminus_pantheon_pp($realm, $uuid, $path=FALSE) {
   if ($result === FALSE) {
     return FALSE;
   }
-  return TRUE;
-}
-
-/**
- * Add a hostname.
- */
-function drush_terminus_pantheon_hostname_add($site, $environment, $hostname) {
-  $data = array('site' => $site, 'environment' => $environment);
-  $path = 'environments/'. $environment .'/hostnames/'. rawurlencode($hostname);
-  $result = terminus_request('site', $site, $path, 'PUT', $data);
-  if ($result === FALSE) {
-    return FALSE;
-  }
-  drush_log("Added '$hostname' to the $environment environment", 'ok');
-  return TRUE;
-}
-
-/**
- * Remove a hostname.
- */
-function drush_terminus_pantheon_hostname_remove($site, $environment, $hostname) {
-  $path = 'environments/'. $environment .'/hostnames/'. rawurlencode($hostname);
-  $result = terminus_request('site', $site, $path, 'DELETE');
-  if ($result === FALSE) {
-    return FALSE;
-  }
-  drush_log("Removed '$hostname' from the $environment environment", 'ok');
   return TRUE;
 }
 
