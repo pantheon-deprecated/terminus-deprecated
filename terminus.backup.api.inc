@@ -27,7 +27,7 @@ function terminus_api_backup_download_url($site_uuid, $environment, $bucket, $el
 /**
  * API Function to make a backup.
  */
-function terminus_api_environment_site_backup($site_uuid, $environment, $entry_type = 'export', $code = TRUE, $db = TRUE, $files = TRUE) {
+function terminus_api_site_make_backup($site_uuid, $environment, $entry_type = 'backup', $code = TRUE, $db = TRUE, $files = TRUE) {
   $realm = 'site';
   $uuid = $site_uuid;
   $path = 'environments/' . $environment . '/backups/create';
@@ -40,65 +40,4 @@ function terminus_api_environment_site_backup($site_uuid, $environment, $entry_t
       'files' => ($files) ? 1 : 0,
   );
   return terminus_request($realm, $uuid, $path, $method, $data);
-}
-
-/**
- * API Call to get the backup schedule.
- */
-function terminus_api_schedule_backup_list($site_uuid, $environment) {
-  $realm = 'site';
-  $uuid = $site_uuid;
-  $path = 'environments/' . $environment . '/backups/schedule';
-  $method = 'GET';
-  return terminus_request($realm, $uuid, $path, $method);
-}
-
-/**
- * API Call to PUT a single backup schedule.
- *
- * $day = integer 0 to 6 (0 = sunday).
- *
- * $hour = hour of day to perform the backup.
- *
- * $ttl = time to keep in seconds.
- */
-function terminus_api_schedule_backup($site_uuid, $environment, $day, $hour, $ttl) {
-  $realm = 'site';
-  $uuid = $site_uuid;
-  $path = 'environments/' . $environment . '/backups/schedule';
-  $method = 'PUT';
-  $data = json_encode(
-    array($day => array('hour' => $hour, 'ttl' => $ttl))
-  );
-  return terminus_request($realm, $uuid, $path, $method, $data);
-}
-
-/**
- * API Call to accept an array of backup days. Should be like so:
- *
- * $batch = array(0 => array('hour' => 12, 'ttl' => 86400))
- */
-function terminus_api_schedule_backup_batch($site_uuid, $environment, $batch) {
-  $realm = 'site';
-  $uuid = $site_uuid;
-  $path = 'environments/' . $environment . '/backups/schedule';
-  $method = 'PUT';
-  $data = json_encode($batch);
-  return terminus_request($realm, $uuid, $path, $method, $data);
-}
-
-/**
- * API Call to DELETE the backup schedule.
- *
- * $day = the day to delete. If not specified, all schedules are wiped!
- */
-function terminus_api_schedule_backup_delete($site_uuid, $environment, $day = FALSE) {
-  $realm = 'site';
-  $uuid = $site_uuid;
-  $path = 'environments/' . $environment . '/backups/schedule';
-  if ($day) {
-    $path .= "?day=$day";
-  }
-  $method = 'DELETE';
-  return terminus_request($realm, $uuid, $path, $method);
 }
