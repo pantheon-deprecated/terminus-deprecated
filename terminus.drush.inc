@@ -372,7 +372,7 @@ function drush_terminus_pantheon_site_get_backup($site_uuid = FALSE, $environmen
 /**
  * Make a backup. Uses more generic backup api.
  */
-function drush_terminus_pantheon_site_backup($site_uuid, $environment) {
+function drush_terminus_pantheon_site_make_backup($site_uuid, $environment) {
   $data = terminus_session_data();
   if (!$data) {
     drush_log('You are not authenticated', 'failed');
@@ -388,7 +388,7 @@ function drush_terminus_pantheon_site_backup($site_uuid, $environment) {
   }
   // Include backup commands.
   include_once('terminus.backup.api.inc');
-  $result = terminus_api_environment_site_backup($site_uuid, $environment, 'backups');
+  $result = terminus_api_site_make_backup($site_uuid, $environment, 'backup');
   drush_print("Backup initiated.");
   return TRUE;
 }
