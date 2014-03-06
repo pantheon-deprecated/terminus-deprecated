@@ -436,7 +436,7 @@ function terminus_drush_command() {
   $items['pantheon-site-uuid'] = array(
     'description' => "Get the site UUID based on the name.",
     'arguments' => array(
-      'site' => 'Name of the site.',
+      'sites' => 'A list of site names.',
     ),
     'examples' => array(
       'drush psite-uuid mysite --nocache' => 'Get the UUID of your site.',
@@ -1662,10 +1662,13 @@ function drush_terminus_pantheon_site_environment_redis_clear($site_uuid = FALSE
 /**
  * Get a site uuid based on the name.
  */
-function drush_terminus_pantheon_site_uuid($site_name) {
+function drush_terminus_pantheon_site_uuid() {
+  $site_names = pm_parse_arguments(func_get_args());
   terminus_bootstrap();
-  $site_uuid = terminus_get_site_uuid_by_name($site_name);
-  drush_print($site_uuid);
+  foreach ($site_names as $site_name) {
+    $site_uuid = terminus_get_site_uuid_by_name($site_name);
+    drush_print($site_name . ': ' . $site_uuid);
+  }
   return TRUE;
 }
 
