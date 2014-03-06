@@ -4183,6 +4183,7 @@ function terminus_get_site_uuid_by_name($site_name) {
   # Get all the orgs where they are an admin.
   $result = terminus_api_user_organizations($user_uuid);
   $orgs = json_decode($result['json']);
+  $check_orgs = array();
   foreach ($orgs as $org => $data) {
     if ($data->admin) {
       $check_orgs[] = $org;
