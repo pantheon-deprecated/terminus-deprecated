@@ -1666,8 +1666,13 @@ function drush_terminus_pantheon_site_uuid() {
   $site_names = pm_parse_arguments(func_get_args());
   terminus_bootstrap();
   foreach ($site_names as $site_name) {
-    $site_uuid = terminus_get_site_uuid_by_name($site_name);
-    drush_print($site_name . ': ' . $site_uuid);
+    if ($site_uuid = terminus_get_site_uuid_by_name($site_name)) {
+      $output = $site_name . ': ' . $site_uuid;
+    }
+    else {
+      $output = dt('@site_name: No uuid found.', array('@site_name' => $site_name));
+    }
+    drush_print($output);
   }
   return TRUE;
 }
