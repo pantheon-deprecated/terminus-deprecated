@@ -18,7 +18,7 @@ Travis CI status: [<img src="https://travis-ci.org/pantheon-systems/terminus.png
 
 ## Requirements
 
-* Drush 5.1 or higher - https://github.com/drush-ops/drush
+* Drush 5.8 or higher - https://github.com/drush-ops/drush
 * PHP 5.3.3 or higher with cURL
 
 ## Installation
