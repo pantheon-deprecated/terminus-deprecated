@@ -441,6 +441,9 @@ function terminus_drush_command() {
     'examples' => array(
       'drush psite-uuid mysite --nocache' => 'Get the UUID of your site.',
     ),
+    'options' => array(
+      'compact' => 'Output only uuid. Useful for scripting.',
+    ),
     'required-arguments' => TRUE,
     'aliases' => array('psite-uuid'),
     'bootstrap' => DRUSH_BOOTSTRAP_DRUSH,
@@ -1668,6 +1671,9 @@ function drush_terminus_pantheon_site_uuid() {
   foreach ($site_names as $site_name) {
     if ($site_uuid = terminus_get_site_uuid_by_name($site_name)) {
       $output = $site_name . ': ' . $site_uuid;
+      if (drush_get_option('compact')) {
+        $output = $site_uuid;
+      }
     }
     else {
       $output = dt('@site_name: No uuid found.', array('@site_name' => $site_name));
