@@ -1483,6 +1483,7 @@ function drush_terminus_pantheon_site_create($name = FALSE) {
  */
 function terminus_site_creation_poll($site_uuid) {
   $ready = 0;
+  $code_deployed = FALSE;
   while (TRUE) {
     echo '.';
     sleep(5);
@@ -1497,25 +1498,31 @@ function terminus_site_creation_poll($site_uuid) {
     foreach ($bindings as $bid => $data) {
       if (isset($data->ready) && $data->ready && !$bindings_ready[$bid]) {
         $bindings_ready[$bid] = TRUE;
-        echo ' ' . dt('@type step complete (@ready/@total).', array(
+        echo "\n" . dt('@type step complete (@ready/@total).', array(
           '@type' => $data->type,
           '@ready' => ++$ready,
           '@total' => count($bindings_ready),
         ));
+      }
+      if (!$code_deployed && $data->environment == 'dev' && $data->type == 'appserver') {
+        if (isset($data->current_commit)) {
+          $code_deployed = TRUE;
+          echo "\n" . dt('Codebase is ready (@current_ref / @current_commit).', array(
+            '@current_ref' => $data->current_ref,
+            '@current_commit' => $data->current_commit,
+          ));
+        }
       }
     }
     $all_ready = TRUE;
     foreach ($bindings_ready as $binding_ready) {
       if (!$binding_ready) $all_ready = FALSE;
     }
-    if ($all_ready) {
+    if ($all_ready && $code_deployed) {
       break;
     }
   }
 
-  // Wait for the sync code job to complete.
-  drush_print("Creating git repository and deploying code to dev.");
-  terminus_notification_poll($site_uuid, 'chef_solo_sync_code');
   echo ' ' . dt('Complete!') . "\n";
 }
 
