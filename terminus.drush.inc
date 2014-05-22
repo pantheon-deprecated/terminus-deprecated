@@ -1172,7 +1172,7 @@ function drush_terminus_pantheon_site_clone($site_uuid, $env_source, $env_target
       $clone_files = TRUE;
     }
   }
-  $clone_db_update = drush_get_option('update') ? 1 : 0;
+  $clone_db_update = drush_get_option('update') ? 1 : FALSE;
 
   // Build label to describe operation.
   $content = array();

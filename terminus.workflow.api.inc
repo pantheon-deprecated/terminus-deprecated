@@ -7,15 +7,17 @@
 /**
  * API call to clone a database between site environments.
  */
-function terminus_api_environment_clone_database($site_uuid, $env_source, $env_target, $updatedb = 0) {
+function terminus_api_environment_clone_database($site_uuid, $env_source, $env_target, $updatedb = FALSE) {
   $realm = 'site';
   $path = 'environments/' . $env_target . '/database';
   $method = 'POST';
   $uuid = $site_uuid;
   $data = array(
     'clone-from-environment' => $env_source,
-    'updatedb' => $updatedb,
   );
+  if ($updatedb) {
+    $data['updatedb'] = 1;
+  }
   return terminus_request($realm, $uuid, $path, $method, $data);
 }
 
