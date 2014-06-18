@@ -1453,7 +1453,8 @@ function drush_terminus_pantheon_site_create($name = FALSE) {
     return TRUE;
   }
 
-  $site_uuid = json_decode($result['json']);
+  $spinup_workflow = json_decode($result['json']);
+  $site_uuid = $spinup_workflow->site_id;
   drush_log(dt('Your new site "@name" is now building with UUID "@site_uuid".', array(
     '@name' => $name,
     '@site_uuid' => $site_uuid,
@@ -1767,6 +1768,7 @@ function drush_terminus_pantheon_site_delete($site_uuid = FALSE) {
   }
   drush_log(dt('Site deleted.'), 'ok');
   drush_cache_clear_all('terminus-sites', 'pantheon', TRUE);
+  drush_cache_clear_all('terminus-user-sites-' . $user_uuid, 'pantheon', TRUE);
   return TRUE;
 }
 
