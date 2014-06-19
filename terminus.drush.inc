@@ -1354,7 +1354,7 @@ function drush_terminus_pantheon_site_import($name = FALSE, $url = FALSE) {
   }
 
   $result = json_decode($result_creation['json']);
-  $site_uuid = $result->site_uuid;
+  $site_uuid = $result->site_id;
 
   // Start import.
   $result_import = terminus_api_site_import_drush_archive($site_uuid, $url);
