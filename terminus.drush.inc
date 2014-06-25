@@ -1353,7 +1353,8 @@ function drush_terminus_pantheon_site_import($name = FALSE, $url = FALSE) {
     return drush_set_error('DRUSH_PSITE_IMPORT_CREATION_FAILED', 'Site creation for import failed.');
   }
 
-  $site_uuid = json_decode($result_creation['json']);
+  $result = json_decode($result_creation['json']);
+  $site_uuid = $result->site_id;
 
   // Start import.
   $result_import = terminus_api_site_import_drush_archive($site_uuid, $url);
@@ -1362,8 +1363,8 @@ function drush_terminus_pantheon_site_import($name = FALSE, $url = FALSE) {
   }
 
   // JSON response.
-  if (isset($json_output) && isset($result['json']) && $result['json']) {
-    drush_print($result['json']);
+  if (isset($json_output) && isset($result_import['json']) && $result_import['json']) {
+    drush_print($result_import['json']);
     return TRUE;
   }
 
@@ -1444,17 +1445,17 @@ function drush_terminus_pantheon_site_create($name = FALSE) {
   $product = drush_get_option('product');
 
   drush_log(dt('Queuing build.'), 'ok');
-  $result = terminus_api_user_site_create($user_uuid, $name, $label, $organization, $product);
-  if (!$result) {
+  $result_create = terminus_api_user_site_create($user_uuid, $name, $label, $organization, $product);
+  if (!$result_create) {
     return drush_set_error('DRUSH_PSITE_CREATE_FAILED', dt('Site creation failed.'));
   }
-  if (isset($json_output) && isset($result['json'])  && $result['json']) {
-    drush_print($result['json']);
+  if (isset($json_output) && isset($result_create['json']) && $result_create['json']) {
+    drush_print($result_create['json']);
     return TRUE;
   }
 
-  $spinup_workflow = json_decode($result['json']);
-  $site_uuid = $spinup_workflow->site_id;
+  $result = json_decode($result_create['json']);
+  $site_uuid = $result->site_id;
   drush_log(dt('Your new site "@name" is now building with UUID "@site_uuid".', array(
     '@name' => $name,
     '@site_uuid' => $site_uuid,
