@@ -1010,6 +1010,7 @@ function drush_terminus_pantheon_site_wake_validate($site_uuid = FALSE, $environ
   if (!$site_uuid = terminus_site_input($site_uuid, TRUE, TRUE)) {
     return drush_set_error('DRUSH_PSITE_WAKE_INVALID_UUID', 'You must specify a valid site UUID.');
   }
+  drush_set_option('site_uuid', $site_uuid);
 
   if (!$site_name = terminus_pantheon_site_name($site_uuid)) {
     return drush_set_error('DRUSH_PSITE_WAKE_NO_SITENAME', 'Unable to determine site name from UUID.');
@@ -1027,7 +1028,8 @@ function drush_terminus_pantheon_site_wake_validate($site_uuid = FALSE, $environ
 /**
  * Wake a Pantheon site.
  */
-function drush_terminus_pantheon_site_wake($site_uuid = FALSE, $environment = FALSE) {
+function drush_terminus_pantheon_site_wake() {
+  $site_uuid = drush_get_option('site_uuid');
   $site_name = drush_get_option('site_name');
   $environment = drush_get_option('environment');
 
