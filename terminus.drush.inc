@@ -2692,7 +2692,7 @@ function drush_terminus_pantheon_site_commit_validate($site_uuid = FALSE, $envir
 
   $diffstat = termins_render_diffstat($site_uuid, $environment);
   if (!$diffstat) {
-    return drush_set_error('DRUSH_PSITE_COMMIT_NO_CHANGES', dt('No changes found to commit, aborting.'));
+    return drush_user_abort(dt('No changes found to commit, aborting.'));
   }
 
   $message = drush_get_option('message', FALSE);
