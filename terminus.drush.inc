@@ -1493,13 +1493,20 @@ function terminus_site_creation_poll($site_uuid) {
     sleep(5);
     $result = terminus_api_site_bindings($site_uuid);
     $bindings = json_decode($result['json']);
-    // Keep track of ready bindings.
+    $bindings_filtered = Array();
+    foreach ($bindings as $bid => $data) {
+      if ($data['type'] != 'fileserver') {
+        $bindings_filtered[$bid] = $data;
+      }
+    }
+
+    // Keep track of ready bindings_filtered.
     if (!isset($bindings_ready)) {
-      foreach ($bindings as $bid => $data) {
+      foreach ($bindings_filtered as $bid => $data) {
         $bindings_ready[$bid] = FALSE;
       }
     }
-    foreach ($bindings as $bid => $data) {
+    foreach ($bindings_filtered as $bid => $data) {
       if (isset($data->ready) && $data->ready && !$bindings_ready[$bid]) {
         $bindings_ready[$bid] = TRUE;
         echo "\n" . dt('@type step complete (@ready/@total).', array(
