@@ -1486,43 +1486,38 @@ function drush_terminus_pantheon_site_create($name = FALSE) {
  * @param $site_uuid
  */
 function terminus_site_creation_poll($site_uuid) {
-  $ready = 0;
-  $code_deployed = FALSE;
+  $deploy_environment = FALSE;
+  $sync_code = FALSE;
   while (TRUE) {
     echo '.';
     sleep(5);
-    $result = terminus_api_site_bindings($site_uuid);
-    $bindings = json_decode($result['json']);
-    // Keep track of ready bindings.
-    if (!isset($bindings_ready)) {
-      foreach ($bindings as $bid => $data) {
-        $bindings_ready[$bid] = FALSE;
+    $result = terminus_api_site_get_workflows($site_uuid);
+    $workflows = json_decode($result['json']);
+    foreach ($workflows as $workflow) {
+      if ($workflow->type === 'deploy_environment' &&
+          $workflow->environment === 'dev' &&
+          $workflow->result === 'succeeded' &&
+          $deploy_environment === FALSE) {
+           $deploy_environment = TRUE;
+           echo "\n" . 'Completed development environment creation in ';
+           echo (int) $workflow->total_time ." seconds. \n";
+         }
+      if ($workflow->type === 'sync_code' &&
+          $workflow->environment === 'dev' &&
+          $workflow->result === 'succeeded' &&
+          $sync_code === FALSE) {
+           $sync_code = TRUE;
+           echo "\n" . 'Git repository created and deployed to dev in ';
+           echo (int) $workflow->total_time ." seconds. \n";
+         }
+      if ($workflow->result === 'failed') {
+        dt('An unexpected error occurred');
+        print_r($workflows);
+        return drush_set_error('Aborted due to workflow failure.');
       }
     }
-    foreach ($bindings as $bid => $data) {
-      if (isset($data->ready) && $data->ready && !$bindings_ready[$bid]) {
-        $bindings_ready[$bid] = TRUE;
-        echo "\n" . dt('@type step complete (@ready/@total).', array(
-          '@type' => $data->type,
-          '@ready' => ++$ready,
-          '@total' => count($bindings_ready),
-        ));
-      }
-      if (!$code_deployed && $data->environment == 'dev' && $data->type == 'appserver') {
-        if (isset($data->current_commit)) {
-          $code_deployed = TRUE;
-          echo "\n" . dt('Codebase is ready (@current_ref / @current_commit).', array(
-            '@current_ref' => $data->current_ref,
-            '@current_commit' => $data->current_commit,
-          ));
-        }
-      }
-    }
-    $all_ready = TRUE;
-    foreach ($bindings_ready as $binding_ready) {
-      if (!$binding_ready) $all_ready = FALSE;
-    }
-    if ($all_ready && $code_deployed) {
+
+    if ($deploy_environment && $sync_code) {
       break;
     }
   }
