@@ -1515,7 +1515,8 @@ function terminus_site_creation_poll($site_uuid) {
       if ($workflow->result === 'failed') {
         dt('An unexpected workflow failure occurred');
         print_r($workflows);
-        return drush_set_error('Aborted due to workflow failure. Save the above debugging output and contact support.');
+        drush_set_error('Aborted due to workflow failure. Save the above debugging output and contact support.');
+        exit;
       }
     }
 
@@ -1526,7 +1527,8 @@ function terminus_site_creation_poll($site_uuid) {
     if ($time > 1800) {
       dt('Site creation timed out after 30m');
       print_r($workflows);
-      return drush_set_error('Aborted due to timeout. Save the above debugging output and contact support.');
+      drush_set_error('Aborted due to timeout. Save the above debugging output and contact support.');
+      exit;
     }
   }
 
