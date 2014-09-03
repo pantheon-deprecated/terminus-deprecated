@@ -1488,9 +1488,11 @@ function drush_terminus_pantheon_site_create($name = FALSE) {
 function terminus_site_creation_poll($site_uuid) {
   $deploy_environment = FALSE;
   $sync_code = FALSE;
+  $time = 0;
   while (TRUE) {
     echo '.';
     sleep(5);
+    $time = $time + 5;
     $result = terminus_api_site_get_workflows($site_uuid);
     $workflows = json_decode($result['json']);
     foreach ($workflows as $workflow) {
@@ -1511,14 +1513,20 @@ function terminus_site_creation_poll($site_uuid) {
            echo (int) $workflow->total_time ." seconds. \n";
          }
       if ($workflow->result === 'failed') {
-        dt('An unexpected error occurred');
+        dt('An unexpected workflow failure occurred');
         print_r($workflows);
-        return drush_set_error('Aborted due to workflow failure.');
+        return drush_set_error('Aborted due to workflow failure. Save the above debugging output and contact support.');
       }
     }
 
     if ($deploy_environment && $sync_code) {
       break;
+    }
+    // Failsafe: time out after 30m
+    if ($time > 1800) {
+      dt('Site creation timed out after 30m');
+      print_r($workflows);
+      return drush_set_error('Aborted due to timeout. Save the above debugging output and contact support.');
     }
   }
 
