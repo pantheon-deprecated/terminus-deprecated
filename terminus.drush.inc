@@ -683,6 +683,34 @@ function terminus_drush_command() {
     'bootstrap' => DRUSH_BOOTSTRAP_DRUSH,
   );
 
+  $items['pantheon-site-upstream-info'] = array(
+    'description' => 'Get available upstream update status for a site.',
+    'arguments' => array(
+      'site' => 'UUID of the site.',
+    ),
+    'examples' => array(
+      'drush psite-upstream-info SITE_UUID' => 'See if there are upstream udpates available.',
+    ),
+    'aliases' => array('psite-upstream-info'),
+    'bootstrap' => DRUSH_BOOTSTRAP_DRUSH,
+  );
+
+  $items['pantheon-site-upstream-update'] = array(
+    'description' => 'Apply available upstream update status for a site.',
+    'arguments' => array(
+      'site' => 'UUID of the site.',
+    ),
+    'options' => array(
+      'overwrite' => 'Allow upstream changes to overwrite if there are conflicts.',
+      'update' => 'Run update.php after deploying code.',
+    ),
+    'examples' => array(
+      'drush psite-upstream-info SITE_UUID --overwrite' => 'Apply available upstream updates .',
+    ),
+    'aliases' => array('psite-upstream-update'),
+    'bootstrap' => DRUSH_BOOTSTRAP_DRUSH,
+  );
+
   /**
    * Utility Functions.
    */
@@ -1217,6 +1245,35 @@ function drush_terminus_pantheon_site_clone($site_uuid, $env_source, $env_target
   if ($clone_files) {
     drush_log('Initiated files cloning.', 'notice');
     terminus_api_environment_clone_files($site_uuid, $env_source, $env_target);
+  }
+}
+
+/**
+ * Apply upstream updates.
+ */
+function drush_terminus_pantheon_site_upstream_update_validate($site_uuid = FALSE) {
+  $session_data = terminus_bootstrap();
+  if ($session_data === FALSE) {
+    return drush_set_error('DRUSH_PSITE_INFO_NO_SESSION', dt('You must authenticate before using this command.'));
+  }
+
+  if (!$site_uuid = terminus_site_input($site_uuid, TRUE, TRUE)) {
+    return drush_set_error('DRUSH_PSITE_INFO_NO_UUID', dt('You must specify a valid site UUID.'));
+  }
+  drush_set_option('site_uuid', $site_uuid);
+}
+
+/**
+ * Site info.
+ */
+function drush_terminus_pantheon_site_upstream_update() {
+  $site_uuid = drush_get_option('site_uuid');
+  $result = terminus_api_site_info($site_uuid);
+  if (drush_get_option('json')) {
+    drush_print($result['json']);
+  }
+  else {
+    drush_print_r(json_decode($result['json']));
   }
 }
 
