@@ -683,6 +683,23 @@ function terminus_drush_command() {
     'bootstrap' => DRUSH_BOOTSTRAP_DRUSH,
   );
 
+$items['pantheon-site-wipe'] = array(
+  'description' => 'Wipe the content from a particular environment.',
+  'arguments' => array(
+    'site' => 'UUID of the site.',
+    'environment' => 'The target environment (e.g. "live") to which code will be deployed.',
+  ),
+#  'options' => array(
+#    'update' => 'Run update.php after deploying code.',
+#    'cc' => 'Clear cache after deploying code.',
+#  ),
+  'examples' => array(
+    'drush psite-wipe SITE_UUID dev' => 'Wipe the database and files from the dev environment.',
+),
+  'aliases' => array('psite-wipe'),
+  'bootstrap' => DRUSH_BOOTSTRAP_DRUSH,
+);
+
   /**
    * Utility Functions.
    */
