@@ -683,6 +683,46 @@ function terminus_drush_command() {
     'bootstrap' => DRUSH_BOOTSTRAP_DRUSH,
   );
 
+  $items['pantheon-site-upstream-info'] = array(
+    'description' => 'Get the upstream info for a site.',
+    'arguments' => array(
+      'site' => 'UUID of the site.',
+    ),
+    'examples' => array(
+      'drush psite-upstream-info SITE_UUID' => 'See if there are upstream udpates available.',
+    ),
+    'aliases' => array('psite-upstream-info'),
+    'bootstrap' => DRUSH_BOOTSTRAP_DRUSH,
+  );
+
+  $items['pantheon-site-upstream-updates'] = array(
+    'description' => 'Get available upstream update status for a site.',
+    'arguments' => array(
+      'site' => 'UUID of the site.',
+    ),
+    'examples' => array(
+      'drush psite-upstream-updates SITE_UUID' => 'See if there are upstream udpates available.',
+    ),
+    'aliases' => array('psite-upstream-updates'),
+    'bootstrap' => DRUSH_BOOTSTRAP_DRUSH,
+  );
+
+  $items['pantheon-site-upstream-updates-apply'] = array(
+    'description' => 'Apply available upstream update status for a site.',
+    'arguments' => array(
+      'site' => 'UUID of the site.',
+    ),
+    'options' => array(
+      'overwrite' => 'Allow upstream changes to overwrite if there are conflicts.',
+      'updatedb' => 'Run a "drush updatedb" after deploying code.',
+    ),
+    'examples' => array(
+      'drush psite-upstream-updates-apply SITE_UUID --overwrite --updatedb' => 'Apply available upstream updates .',
+    ),
+    'aliases' => array('psite-upstream-updates-apply'),
+    'bootstrap' => DRUSH_BOOTSTRAP_DRUSH,
+  );
+
   /**
    * Utility Functions.
    */
@@ -1217,6 +1257,100 @@ function drush_terminus_pantheon_site_clone($site_uuid, $env_source, $env_target
   if ($clone_files) {
     drush_log('Initiated files cloning.', 'notice');
     terminus_api_environment_clone_files($site_uuid, $env_source, $env_target);
+  }
+}
+
+/**
+ * Upstream update info validate.
+ */
+function drush_terminus_pantheon_site_upstream_info_validate($site_uuid = FALSE) {
+  return terminus_validate_session_data() && terminus_validate_site_uuid_input($site_uuid);
+}
+
+/**
+ * Upstream update info.
+ */
+function drush_terminus_pantheon_site_upstream_info() {
+  $site_uuid = drush_get_option('site_uuid');
+  $result = terminus_api_site_uptream_get($site_uuid);
+  if (drush_get_option('json')) {
+    drush_print($result['json']);
+  }
+  else {
+    $upstream = json_decode($result['json']);
+    drush_print("Upstream: $upstream->url", 2);
+    drush_print("Branch: $upstream->branch", 2);
+  }
+}
+
+
+/**
+ * Upstream updates validate.
+ */
+function drush_terminus_pantheon_site_upstream_updates_validate($site_uuid = FALSE) {
+  return terminus_validate_session_data() && terminus_validate_site_uuid_input($site_uuid);
+}
+
+/**
+ * Upstream updates available?.
+ */
+function drush_terminus_pantheon_site_upstream_updates() {
+  $site_uuid = drush_get_option('site_uuid');
+  $result = terminus_api_site_uptream_updates_get($site_uuid);
+  if (drush_get_option('json')) {
+    drush_print($result['json']);
+  }
+  else {
+    $updates = json_decode($result['json']);
+    if ($updates->behind == 0) {
+      drush_log('No updates available. The dev env is up to date.', 'ok');
+    }
+    else {
+      $rows = array();
+      foreach ($updates->update_log as $commit => $info) {
+        $rows[] = array($info->email, $info->datetime, $info->message);
+      }
+      array_unshift($rows, array("Author", "Date", "Message"));
+      drush_log('Updates found', 'ok');
+      drush_print_table($rows, TRUE);
+    }
+  }
+}
+
+/**
+ * Apply upstream updates validate.
+ */
+function drush_terminus_pantheon_site_upstream_updates_apply_validate($site_uuid = FALSE) {
+  return terminus_validate_session_data() && terminus_validate_site_uuid_input($site_uuid);
+}
+
+/**
+ * Apply upstream updates.
+ */
+function drush_terminus_pantheon_site_upstream_updates_apply() {
+  $site_uuid = drush_get_option('site_uuid');
+  $updatedb = drush_get_option('updatedb') ? TRUE : FALSE;
+  $overwrite = drush_get_option('overwrite') ? TRUE : FALSE;
+  $result = terminus_api_site_uptream_updates_apply($site_uuid, $updatedb, $overwrite);
+  if (drush_get_option('json')) {
+    drush_print($result['json']);
+  }
+  else {
+    drush_log('Applying upstream updates...', 'ok');
+    $result = json_decode($result['json']);
+    if ($result->conflicts == '') {
+      drush_log('Success!', 'ok');
+    }
+    else {
+      drush_log('Conflicts detected!', 'error');
+      print_r($result->conflicts);
+      if (!$overwrite) {
+        drush_print("Try re-running with the --overwrite option to prioritize upstream updates and resolve these conflicts.");
+      }
+      else {
+        drush_print("We were not able to auto-resolve these. You will need to clone the repository, pull the updates, and resolve the conflicts manually.");
+      }
+    }
   }
 }
 
@@ -4421,4 +4555,54 @@ function terminus_validate_sites($json) {
  */
 function terminus_validate_hostname($hostname) {
   return preg_match('/(?=^.{1,254}$)(^(?:(?!\d|-)[a-z0-9\-]{1,63}(?<!-)\.)+(?:[a-z]{2,})$)/i', $hostname);
+}
+
+
+/**
+ * Helper functions to validate input for a site_uuid.
+ */
+
+/**
+ * Validate that we have a real session.
+ */
+function terminus_validate_session_data() {
+  $session_data = terminus_bootstrap();
+  if ($session_data === FALSE) {
+    return drush_set_error('DRUSH_PSITE_INFO_NO_SESSION', dt('You must authenticate before using this command.'));
+  }
+
+  return TRUE;
+}
+
+/**
+ * Validate a site_uuid input.
+ *
+ * Will take the input, or get it interactively, and set the option.
+ */
+function terminus_validate_site_uuid_input($site_uuid) {
+  if (!$site_uuid = terminus_site_input($site_uuid, TRUE, TRUE)) {
+    return drush_set_error('DRUSH_PSITE_INFO_NO_UUID', dt('You must specify a valid site UUID.'));
+  }
+  drush_set_option('site_uuid', $site_uuid);
+
+  if (!$site_name = terminus_pantheon_site_name($site_uuid)) {
+    return drush_set_error('DRUSH_PSITE_WAKE_NO_SITENAME', 'Unable to determine site name from UUID.');
+  }
+  drush_set_option('site_name', $site_name);
+
+  return TRUE;
+}
+
+/**
+ * Validate an environment name.
+ */
+function terminus_validate_environemnt_input($environment) {
+  if (!terminus_validate_environment($environment)) {
+    if (!$environment = terminus_session_select_data('environment', $site_uuid)) {
+      return drush_set_error('DRUSH_PSITE_WAKE_INVALID_ENV', 'You must specify a valid environment name.');
+    }
+  }
+  drush_set_option('environment', $environment);
+
+  return TRUE;
 }
