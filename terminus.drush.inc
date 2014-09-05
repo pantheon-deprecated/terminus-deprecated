@@ -484,6 +484,15 @@ function terminus_drush_command() {
     'bootstrap' => DRUSH_BOOTSTRAP_DRUSH,
   );
 
+  $items['pantheon-site-redis-enable'] = array(
+    'description' => 'Enables redis cache server for site. Requires additional configuration. See http://helpdesk.getpantheon.com/customer/portal/articles/401317-redis/',
+    'arguments' => array(
+    'site' => 'UUID or name of the site.',
+  ),
+    'aliases' => array('psite-redis-enable'),
+    'bootstrap' => DRUSH_BOOTSTRAP_DRUSH,
+  );
+
   $items['pantheon-site-environment-redis-clear'] = array(
     'description' => 'Clear redis cache of a site environment.',
     'arguments' => array(
@@ -1734,6 +1743,25 @@ function terminus_notification_poll($site_uuid, $type) {
     else if (count($notifications) > 0) {
       break;
     }
+  }
+}
+
+/**
+ * Enable redis validate
+ */
+function drush_terminus_pantheon_site_redis_enable_validate($site_uuid = FALSE) {
+ return terminus_validate_session_data() && terminus_validate_site_uuid_input($site_uuid);
+}
+
+/* Enable redis */
+function drush_terminus_pantheon_site_redis_enable($site_uuid) {
+  $site_uuid = drush_get_option('site_uuid');
+  $result = terminus_api_site_redis_enable($site_uuid);
+  if (drush_get_option('json')) {
+    drush_print($result['json']);
+  }
+  elseif ($result['json'] == 'true') {
+    drush_print('Redis cacheserver enabled. Requires additional configuration. Please see http://helpdesk.getpantheon.com/customer/portal/articles/401317-redis');
   }
 }
 

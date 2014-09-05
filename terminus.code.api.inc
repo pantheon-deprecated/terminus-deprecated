@@ -75,3 +75,17 @@ function terminus_api_code_upstream_update($site_uuid, $updatedb = FALSE, $overw
 
   return terminus_request($realm, $site_uuid, $path, $method, $data);
 }
+
+/**
+ * API Call to Enable Redis
+ */
+function terminus_api_site_redis_enable($site_uuid) {
+  $realm = 'site';
+  $path = 'settings';
+  $method = 'PUT';
+  $data = array(
+    'allow_cacheserver' => true,
+  );
+
+  return terminus_request($realm, $site_uuid, $path, $method, $data);
+ }
