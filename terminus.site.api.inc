@@ -112,6 +112,34 @@ function terminus_api_site_uptream_get($site_uuid) {
 }
 
 /**
+ * API Function to Get Site Upstream
+ */
+function terminus_api_site_uptream_updates_get($site_uuid) {
+  $realm = 'site';
+  $uuid = $site_uuid;
+  $path = 'code-upstream-updates';
+  $method = 'GET';
+
+  return terminus_request($realm, $uuid, $path, $method);
+}
+
+/**
+ * API Function to apply available upstream updates.
+ */
+function terminus_api_site_uptream_updates_apply($site_uuid, $overwrite = FALSE, $updatedb = FALSE) {
+  $realm = 'site';
+  $uuid = $site_uuid;
+  $path = 'code-upstream-updates';
+  $method = 'POST';
+  $data = array('updatedb' => $updatedb);
+  if ($overwrite) {
+    $data['xoption'] = 'theirs';
+  }
+
+  return terminus_request($realm, $uuid, $path, $method, $data);
+}
+
+/**
  * API Function to Get Site Attributes
  */
 function terminus_api_site_attributes_get($site_uuid) {
