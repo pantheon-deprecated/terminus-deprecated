@@ -723,6 +723,19 @@ function terminus_drush_command() {
     'bootstrap' => DRUSH_BOOTSTRAP_DRUSH,
   );
 
+  $items['pantheon-site-environment-content-wipe'] = array(
+    'description' => 'Wipe the content from a particular environment.',
+    'arguments' => array(
+      'site' => 'UUID of the site.',
+      'environment' => 'The target environment (e.g. "live") to which code will be deployed.',
+    ),
+    'examples' => array(
+    'drush psite-ewipe SITE_UUID dev' => 'Wipe the database and files from the dev environment.',
+    ),
+    'aliases' => array('psite-ewipe'),
+    'bootstrap' => DRUSH_BOOTSTRAP_DRUSH,
+  );
+
   /**
    * Utility Functions.
    */
@@ -1173,6 +1186,51 @@ function drush_terminus_pantheon_site_deploy($site_uuid = '', $env_target = '') 
   // Deploy code.
   drush_log('Initiated code deployment' . $content_str . '.', 'notice');
   terminus_api_environment_deploy_code($site_uuid, $env_target, $updatedb, $clearcache);
+}
+
+/**
+ * Validate Pantheon site environment content wipe.
+ */
+function drush_terminus_pantheon_site_environment_content_wipe_validate($site_uuid = FALSE, $environment = FALSE) {
+  $session_data = terminus_bootstrap();
+  if ($session_data === FALSE) {
+    return drush_set_error('DRUSH_PSITE_EWIPE_NO_SESSION', dt('You must authenticate before using this command.'));
+  }
+
+  if (!$site_uuid = terminus_site_input($site_uuid, TRUE, TRUE)) {
+    return drush_set_error('DRUSH_PSITE_EWIPE_INVALID_UUID', dt('You must specify a valid site UUID.'));
+  }
+  drush_set_option('site_uuid', $site_uuid);
+
+  if (!terminus_validate_environment($environment)) {
+    if (!$environment = terminus_session_select_data('environment', $site_uuid)) {
+      return drush_set_error('DRUSH_PSITE_EWIPE_INVALID_ENV', dt('You must specify a valid environment name.'));
+    }
+  }
+
+  drush_set_option('environment', $environment);
+  $result = terminus_api_site_info($site_uuid, $environment);
+
+  if (!$result) {
+    return drush_set_error('DRUSH_PSITE_EWIPE_INFO_REQFAIL', dt('Unable to get wipe information.'));
+    }
+}
+
+/**
+ * Wipe a site environment.
+ */
+function drush_terminus_pantheon_site_environment_content_wipe($site_uuid = FALSE, $environment = FALSE, $username = FALSE, $password = FALSE) {
+  $site_uuid = drush_get_option('site_uuid');
+  $environment = drush_get_option('environment');
+
+  $result = terminus_api_environment_content_wipe($site_uuid, $environment);
+  if (!$result) {
+    return drush_set_error('DRUSH_PSITE_WIPE_REQFAIL', dt('Unable to wipe.'));
+  }
+  drush_log(dt('@site_name @environment is now wiped.', array(
+    '@site_name' => terminus_pantheon_site_name($site_uuid),
+    '@environment' => $environment,
+  )), 'ok');
 }
 
 /**
