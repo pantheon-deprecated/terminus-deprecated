@@ -1213,7 +1213,8 @@ function drush_terminus_pantheon_site_environment_content_wipe_validate($site_uu
 
   if (!$result) {
     return drush_set_error('DRUSH_PSITE_EWIPE_INFO_REQFAIL', dt('Unable to get wipe information.'));
-    }
+  }
+  # TODO: get a prompt to confirm that we want to actually destroy all the data!
 }
 
 /**
@@ -1227,6 +1228,8 @@ function drush_terminus_pantheon_site_environment_content_wipe($site_uuid = FALS
   if (!$result) {
     return drush_set_error('DRUSH_PSITE_WIPE_REQFAIL', dt('Unable to wipe.'));
   }
+  $workflow = json_decode($result['json']);
+  terminus_workflow_poll($site_uuid, $workflow->id);
   drush_log(dt('@site_name @environment is now wiped.', array(
     '@site_name' => terminus_pantheon_site_name($site_uuid),
     '@environment' => $environment,
@@ -1794,6 +1797,34 @@ function terminus_notification_poll($site_uuid, $type) {
     }
   }
 }
+
+/**
+ * @param string $site_uuid
+ * @param string $workflow_uuid
+ *
+ * Most jobs triggered on the platform will return a workflow object.
+ * This allows us to poll on an ID to block on completion.
+ */
+function terminus_workflow_poll($site_uuid, $workflow_uuid) {
+  while (TRUE) {
+    echo '.';
+    sleep(5);
+    $result = terminus_api_site_get_workflow($site_uuid, $workflow_uuid);
+    $workflow = json_decode($result['json']);
+    if ($workflow->result == 'succeeded') {
+      drush_print();
+      drush_log('Workflow "'. $workflow->type .'" complete in '. (int) $workflow->total_time .'s', 'ok');
+      return TRUE;
+    }
+    elseif($workflow->result == 'failed') {
+      drush_print();
+      drush_log('Workflow failed!', 'error');
+      print_r($workflow);
+      return FALSE;
+    }
+  }
+}
+
 
 /**
  * Validation prior to clearing a site environment's redis cache.
@@ -2421,7 +2452,12 @@ function drush_terminus_pantheon_site_connection_mode($site_uuid = FALSE, $envir
 
   $cmode = strtolower($cmode);
   $onserverdevstatus = $cmode == 'sftp' ? TRUE : FALSE;
-  terminus_api_site_environment_onserverdev_set($site_uuid, $environment, $onserverdevstatus);
+  drush_log('Triggering connection mode change', 'ok');
+  $result = terminus_api_site_environment_onserverdev_set($site_uuid, $environment, $onserverdevstatus);
+  if ($result) {
+    $workflow = json_decode($result['json']);
+    terminus_workflow_poll($site_uuid, $workflow->id);
+  }
 
   $mode = $onserverdevstatus ? 'SFTP' : 'Git';
   drush_log('Connection mode set to: ' . $mode, 'ok');
