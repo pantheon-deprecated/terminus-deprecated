@@ -113,8 +113,8 @@ Updates can be performed in the directory:
     drush psite-create $SITE_NAME --label="$SITE_DESC" --product=21e1fada-199c-492b-97bd-0b36b53a9da0
     # Update your aliases.
     drush paliases
-    # Determine the site_uuid of the newly created site.
-    SITE_UUID=$(drush psite-uuid $SITE_NAME)
+    # Determine the site_uuid of the newly created site and save as variable SITE_UUID.
+    SITE_UUID=`drush psite-uuid $SITE_NAME | cut -f2 -d' '`
     # Change the connection mode of the dev environment to SFTP.
     drush psite-cmode $SITE_UUID dev sftp
     # Use a public URL as the source for drush_make to download a few modules.
