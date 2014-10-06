@@ -569,7 +569,7 @@ function terminus_drush_command() {
       'organization' => 'UUID of the organization you want to use.',
     ),
     'examples' => array(
-      'drush porg-sites --nocache' => 'Get a fresh list of sites.',
+      'drush porg-sites' => 'Get a fresh list of sites.',
     ),
     'aliases' => array('porg-sites'),
     'bootstrap' => DRUSH_BOOTSTRAP_DRUSH,
