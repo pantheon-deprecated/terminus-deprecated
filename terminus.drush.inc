@@ -1750,13 +1750,14 @@ function terminus_job_poll($site_uuid, $slot) {
   while (TRUE) {
     echo '.';
     sleep(5);
-    $jobs = terminus_jobs_list($site_uuid, FALSE, $slot);
-    foreach ($jobs as $job) {
-      if ($job['completed']) {
-        if ($job['status'] != 'SUCCESS') {
-          return FALSE;
+    if ($jobs = terminus_jobs_list($site_uuid, FALSE, $slot)) {
+      foreach ($jobs as $job) {
+        if ($job['completed']) {
+          if ($job['status'] != 'SUCCESS') {
+            return FALSE;
+          }
+          return TRUE;
         }
-        return TRUE;
       }
     }
   }
