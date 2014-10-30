@@ -3759,7 +3759,7 @@ function terminus_validate_session($data) {
  */
 function terminus_request($realm, $uuid, $path = FALSE, $method = 'GET', $data = NULL) {
   static $ch = FALSE;
-  if (!$ch) {
+  if (gettype($ch) !== 'resource') {
     $ch = curl_init();
   }
   $headers = array();
