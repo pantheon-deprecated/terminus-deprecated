@@ -3760,7 +3760,7 @@ function terminus_validate_session($data) {
  */
 function terminus_request($realm, $uuid, $path = FALSE, $method = 'GET', $data = NULL) {
   static $ch = FALSE;
-  if (!$ch) {
+  if (gettype($ch) !== 'resource') {
     $ch = curl_init();
   }
   $headers = array();
@@ -3795,7 +3795,7 @@ function terminus_request($realm, $uuid, $path = FALSE, $method = 'GET', $data =
     CURLOPT_HEADER => 1,
     CURLOPT_PORT => TERMINUS_PORT,
     CURLOPT_RETURNTRANSFER => 1,
-    CURLOPT_TIMEOUT => 30,
+    CURLOPT_TIMEOUT => 45,
     CURLOPT_CUSTOMREQUEST => $method,
     CURLOPT_COOKIE => $session_data['session'],
     CURLOPT_HTTPHEADER => $headers,
