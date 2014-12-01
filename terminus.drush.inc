@@ -802,6 +802,45 @@ function terminus_drush_command() {
     'bootstrap' => DRUSH_BOOTSTRAP_DRUSH,
   );
 
+  /**
+   * SSH Key manipulation.
+   */
+  $items['pantheon-get-ssh-keys'] = array(
+    'description' => "Get all ssh keys associated with your Pantheon Account.",
+    'aliases' => array('pgetkeys'),
+    'bootstrap' => DRUSH_BOOTSTRAP_DRUSH,
+  );
+
+  $items['pantheon-add-ssh-key'] = array(
+    'description' => "Add an ssh key to your Pantheon Account.",
+    'examples' => array(
+      'drush paddkey "PUBLIC_KEY"' => 'Add a public SSH Key to your account. Remember to put quotes around the key string.',
+    ),
+    'arguments' => array(
+      'key' => dt('The SSH key to add.'),
+    ),
+    'aliases' => array('paddkey'),
+    'bootstrap' => DRUSH_BOOTSTRAP_DRUSH,
+  );
+
+  $items['pantheon-delete-ssh-key'] = array(
+    'description' => "Remove an ssh key from your Pantheon Account.",
+    'arguments' => array(
+      'key' => dt("The UUID of the SSH key to Remove."),
+    ),
+    'examples' => array(
+      'drush pdeletekey KEY_UUID' => "Delete an SSH Key from your account. You can get the UUID of all your keys by using 'drush pantheon-get-ssh-keys'",
+    ),
+    'aliases' => array('pdeletekey'),
+    'bootstrap' => DRUSH_BOOTSTRAP_DRUSH,
+  );
+
+  $items['pantheon-delete-all-ssh-keys'] = array(
+    'description' => "Remove all ssh keys from your Pantheon Account.",
+    'aliases' => array('pdeleteallkeys'),
+    'bootstrap' => DRUSH_BOOTSTRAP_DRUSH,
+  );
+
   // Include standard options for all commands:
   $common = array(
     'nocache' => array(
@@ -4705,4 +4744,107 @@ function terminus_validate_environemnt_input($environment) {
   drush_set_option('environment', $environment);
 
   return TRUE;
+}
+
+
+/**
+* Validate the user is logged in to be able to get ssh keys.
+*/
+function drush_terminus_pantheon_get_ssh_keys_validate() {
+  $session_data = terminus_bootstrap();
+  if ($session_data === FALSE) {
+    return drush_set_error('DRUSH_PSITE_WAKE_NO_SESSION', 'You must authenticate before using this command.');
+  }
+  drush_set_option('session_data', $session_data);
+}
+
+/**
+* Get a list of SSH Keys associated with the currently logged in user.
+*/
+function drush_terminus_pantheon_get_ssh_keys() {
+  extract(drush_get_option('session_data'));
+  $result = terminus_api_user_sshkey_get($user_uuid);
+  if ($result === FALSE) {
+    return FALSE;
+  }
+  $keys = json_decode($result['json']);
+
+  // Print the SSH Keys with some nice formatting.
+  $rows = array();
+  foreach ($keys as $key_uuid => $key) {
+    $rows[$key_uuid] = array($key_uuid, $key);
+  }
+  if(sizeof($rows) < 1) {
+    drush_print("Your account has no SSH Keys. Why don't you add one with 'drush pantheon-add-ssh-key'.");
+  } else {
+    array_unshift($rows, array("Key UUID", "Key"));
+    drush_print_table($rows, TRUE);
+  }
+}
+
+/**
+* Validate add an SSH key.
+*/
+function drush_terminus_pantheon_add_ssh_key_validate($key = FALSE) {
+  $session_data = terminus_bootstrap();
+  if ($session_data === FALSE) {
+    return drush_set_error('DRUSH_PSITE_WAKE_NO_SESSION', 'You must authenticate before using this command.');
+  }
+  if ($key === FALSE) {
+    return drush_set_error('DRUSH_PSITE_INVALID_SSH_KEY', 'You must Specify an SSH Key.');
+  }
+  // @see https://gist.github.com/paranoiq/1932126 for more info on where this regex came from.
+  if (preg_match("/ssh-rsa AAAA[\/0-9A-Za-z+\/]+[=]{0,3} ([^@]+@[^@]+)/", $key) == FALSE) {
+    return drush_set_error('DRUSH_PSITE_INVALID_SSH_KEY', 'You entered an invalid SSH Key.');
+  }
+  drush_set_option('session_data', $session_data);
+}
+
+/**
+* Add an SSH key.
+*/
+function drush_terminus_pantheon_add_ssh_key($key) {
+  extract(drush_get_option('session_data'));
+  return terminus_api_sshkey_validate($user_uuid, $key);
+}
+
+/**
+* Validate delete an SSH key.
+*/
+function drush_terminus_pantheon_delete_ssh_key_validate($key = FALSE) {
+  $session_data = terminus_bootstrap();
+  if ($session_data === FALSE) {
+    return drush_set_error('DRUSH_PSITE_WAKE_NO_SESSION', 'You must authenticate before using this command.');
+  }
+  if ($key === FALSE) {
+    return drush_set_error('DRUSH_PSITE_INVALID_SSH_KEY', 'You must Specify an SSH Key UUID.');
+  }
+  drush_set_option('session_data', $session_data);
+}
+
+/**
+* Delete an SSH Key.
+*/
+function drush_terminus_pantheon_delete_ssh_key($key) {
+  extract(drush_get_option('session_data'));
+  return terminus_api_user_sshkey_delete_key($user_uuid, $key);
+}
+
+/**
+* Validate deleting all ssh keys associated with the currently logged in user.
+*/
+function drush_terminus_pantheon_delete_all_ssh_keys_validate() {
+  $session_data = terminus_bootstrap();
+  if ($session_data === FALSE) {
+    return drush_set_error('DRUSH_PSITE_WAKE_NO_SESSION', 'You must authenticate before using this command.');
+  }
+  drush_set_option('session_data', $session_data);
+}
+
+/**
+* Delete ALL SSH keys associated with the currently logged in user.
+*/
+function drush_terminus_pantheon_delete_all_ssh_keys() {
+  extract(drush_get_option('session_data'));
+  return terminus_api_user_sshkey_delete_all($user_uuid);
 }
