@@ -1684,7 +1684,7 @@ function drush_terminus_pantheon_site_create($name = FALSE) {
  * @param $site_uuid
  */
 function terminus_site_creation_poll($site_uuid) {
-  $deploy_environment = FALSE;
+  $dev_environment = FALSE;
   $sync_code = FALSE;
   $time = 0;
   while (TRUE) {
@@ -1697,8 +1697,17 @@ function terminus_site_creation_poll($site_uuid) {
       if ($workflow->type === 'deploy_environment' &&
           $workflow->environment === 'dev' &&
           $workflow->result === 'succeeded' &&
-          $deploy_environment === FALSE) {
-           $deploy_environment = TRUE;
+          $dev_environment === FALSE) {
+           $dev_environment = TRUE;
+           echo "\n" . 'Completed development environment creation in ';
+           echo (int) $workflow->total_time ." seconds. \n";
+         }
+      // When spinning up via a product uuid directly, the deploy_product
+      // workflow is used.
+      if ($workflow->type === 'deploy_product' &&
+          $workflow->result === 'succeeded' &&
+          $dev_environment === FALSE) {
+           $dev_environment = TRUE;
            echo "\n" . 'Completed development environment creation in ';
            echo (int) $workflow->total_time ." seconds. \n";
          }
@@ -1718,7 +1727,7 @@ function terminus_site_creation_poll($site_uuid) {
       }
     }
 
-    if ($deploy_environment && $sync_code) {
+    if ($dev_environment && $sync_code) {
       break;
     }
     // Failsafe: time out after 30m
