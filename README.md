@@ -1,8 +1,9 @@
-# Deprecated.
+# Deprecated. End of Life October 1, 2016.
 
-Do not install this software. Please use the successor [Pantheon CLI](https://github.com/pantheon-systems/cli) project.
+Do not install this software. Please use the successor [Pantheon Terminus](https://github.com/pantheon-systems/terminus) project.
 
-You may still report critical issues if you are still using this tool for legacy reasons. We will do our best to keep it operational, but all Pantheon users are advised to upgrade ASAP.
+The terminus.getpantheon.com domain will be retired and this project will cease to function on October 1, 2016.
+
 
 ### MIT license
 
